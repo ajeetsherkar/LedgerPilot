@@ -7,35 +7,44 @@ DATA_DIR = Path("data")
 EXPECTED_COLUMNS = {
     "orders.csv": [
         "order_id",
-        "order_date",
+        "merchant_id",
         "customer_id",
+        "customer_name",
+        "order_amount",
         "currency",
-        "gross_amount",
+        "order_date",
+        "status",
     ],
+
     "payments.csv": [
         "payment_id",
         "order_id",
-        "payment_date",
         "payment_method",
+        "upi_ref",
+        "amount",
         "currency",
-        "paid_amount",
-        "transaction_ref",
+        "payment_date",
+        "status",
     ],
+
     "settlements.csv": [
         "settlement_id",
-        "order_id",
+        "payment_id",
+        "gross_amount",
+        "platform_fee",
+        "gst_on_fee",
+        "net_amount",
         "settlement_date",
-        "currency",
-        "settled_amount",
-        "settlement_ref",
+        "settlement_reference",
     ],
-    "bank_transactions.csv": [
-        "bank_txn_id",
+
+    "bank.csv": [
+        "transaction_id",
         "transaction_date",
+        "credit_amount",
         "currency",
-        "amount",
-        "transaction_ref",
-        "description",
+        "narration",
+        "reference",
     ],
 }
 

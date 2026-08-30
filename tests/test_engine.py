@@ -21,23 +21,39 @@ def test_reconcile_all():
 
     for result in results:
         assert result.reconciliation_status == "MATCHED"
-        assert result.exception_type == "MATCHED"
+        assert result.exception_type is None
+
+
+def _bank_for_payment(payment, settlements, banks):
+    """Resolve the bank record for a payment via the settlement chain:
+    payment -> settlement (by payment_id) -> bank (by settlement_reference)."""
+    payment_id = payment["payment_id"]
+
+    settlement = next(
+        settlement
+        for settlement in settlements
+        if settlement["payment_id"] == payment_id
+    )
+
+    settlement_reference = settlement["settlement_reference"]
+
+    bank_by_reference = {
+        bank["reference"]: bank
+        for bank in banks
+    }
+
+    return bank_by_reference.get(settlement_reference)
 
 
 def test_payment_mismatch():
     orders, payments, settlements, banks = load_datasets()
 
     payment = payments[0].copy()
-    payment["paid_amount"] = str(
-        float(payment["paid_amount"]) + 100
+    payment["amount"] = str(
+        float(payment["amount"]) + 100
     )
 
-    bank_by_reference = {
-        bank["transaction_ref"]: bank
-        for bank in banks
-    }
-
-    bank = bank_by_reference.get(payment["transaction_ref"])
+    bank = _bank_for_payment(payment, settlements, banks)
 
     result = reconcile_order(
         orders[0],
@@ -56,18 +72,11 @@ def test_settlement_mismatch():
     orders, payments, settlements, banks = load_datasets()
 
     settlement = settlements[1].copy()
-    settlement["settled_amount"] = str(
-        float(settlement["settled_amount"]) + 50
+    settlement["net_amount"] = str(
+        float(settlement["net_amount"]) + 50
     )
 
-    bank_by_reference = {
-        bank["transaction_ref"]: bank
-        for bank in banks
-    }
-
-    bank = bank_by_reference.get(
-        payments[1]["transaction_ref"]
-    )
+    bank = _bank_for_payment(payments[1], settlements, banks)
 
     result = reconcile_order(
         orders[1],
@@ -86,16 +95,24 @@ def test_bank_mismatch():
     orders, payments, settlements, banks = load_datasets()
 
     bank_by_reference = {
-        bank["transaction_ref"]: bank.copy()
+        bank["reference"]: bank.copy()
         for bank in banks
     }
 
-    transaction_ref = payments[2]["transaction_ref"]
+    payment_id = payments[2]["payment_id"]
 
-    bank = bank_by_reference[transaction_ref]
+    settlement = next(
+        settlement
+        for settlement in settlements
+        if settlement["payment_id"] == payment_id
+    )
 
-    bank["amount"] = str(
-        float(bank["amount"]) + 75
+    settlement_reference = settlement["settlement_reference"]
+
+    bank = bank_by_reference[settlement_reference]
+
+    bank["credit_amount"] = str(
+        float(bank["credit_amount"]) + 75
     )
 
     result = reconcile_order(
