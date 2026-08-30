@@ -6,6 +6,7 @@ DATA_DIR = Path("data")
 
 EXPECTED_COLUMNS = {
     "orders.csv": [
+        "chain_id",
         "order_id",
         "merchant_id",
         "customer_id",
@@ -17,6 +18,7 @@ EXPECTED_COLUMNS = {
     ],
 
     "payments.csv": [
+        "chain_id",
         "payment_id",
         "order_id",
         "payment_method",
@@ -28,6 +30,7 @@ EXPECTED_COLUMNS = {
     ],
 
     "settlements.csv": [
+        "chain_id",
         "settlement_id",
         "payment_id",
         "gross_amount",
@@ -39,6 +42,7 @@ EXPECTED_COLUMNS = {
     ],
 
     "bank.csv": [
+        "chain_id",
         "transaction_id",
         "transaction_date",
         "credit_amount",
