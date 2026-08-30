@@ -2,6 +2,7 @@ from pathlib import Path
 import csv
 
 from .models import ReconciliationResult
+from .exceptions import classify_exception
 
 
 DATA_DIR = Path(__file__).resolve().parents[3] / "data"
@@ -94,7 +95,7 @@ def reconcile_order(
     else:
         reconciliation_status = "EXCEPTION"
 
-    return ReconciliationResult(
+    result = ReconciliationResult(
         order_id=order["order_id"],
         payment_status=payment_status,
         settlement_status=settlement_status,
@@ -105,7 +106,12 @@ def reconcile_order(
         bank_amount=bank_amount,
         difference=difference,
         reconciliation_status=reconciliation_status,
+        exception_type="MATCHED",
     )
+
+    result.exception_type = classify_exception(result)
+
+    return result
 
 def reconcile_all() -> list[ReconciliationResult]:
     orders, payments, settlements, bank_transactions = load_datasets()

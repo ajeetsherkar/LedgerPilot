@@ -17,3 +17,4 @@ class ReconciliationResult:
 
     difference: float
     reconciliation_status: str
+    exception_type: str
