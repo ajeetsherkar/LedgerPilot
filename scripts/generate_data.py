@@ -32,12 +32,12 @@ def random_date(rng):
     )
 
 
-def generate_orders(n, rng):
+def generate_orders(n, rng, id_prefix=""):
     rows = []
 
     for i in range(1, n + 1):
-        chain_id = f"CHAIN{i:06d}"
-        order_id = f"ORD{i:04d}"
+        chain_id = f"{id_prefix}CHAIN{i:06d}"
+        order_id = f"{id_prefix}ORD{i:04d}"
 
         customer_id = f"CUST{rng.randint(1, 5):03d}"
 
@@ -58,7 +58,7 @@ def generate_orders(n, rng):
     return rows
 
 
-def generate_payments(orders, rng):
+def generate_payments(orders, rng, id_prefix=""):
     rows = []
 
     for order in orders:
@@ -75,7 +75,7 @@ def generate_payments(orders, rng):
         rows.append(
             {
                 "chain_id": order["chain_id"],
-                "payment_id": f"PAY{order['order_id'][3:]}",
+                "payment_id": f"{id_prefix}PAY{order['order_id'][len(id_prefix) + 3:]}",
                 "order_id": order["order_id"],
                 "payment_method": payment_method,
                 "upi_ref": upi_ref,
@@ -89,7 +89,7 @@ def generate_payments(orders, rng):
     return rows
 
 
-def generate_settlements(payments):
+def generate_settlements(payments, id_prefix=""):
     rows = []
 
     for payment in payments:
@@ -122,7 +122,7 @@ def generate_settlements(payments):
             {
                 "chain_id": payment["chain_id"],
                 "settlement_id": (
-                    f"SET{payment['payment_id'][3:]}"
+                    f"{id_prefix}SET{payment['payment_id'][len(id_prefix) + 3:]}"
                 ),
                 "payment_id": payment["payment_id"],
                 "gross_amount": gross_amount,
@@ -134,7 +134,7 @@ def generate_settlements(payments):
                     + timedelta(days=2)
                 ),
                 "settlement_reference": (
-                    f"SETTXN{payment['payment_id'][3:]}"
+                    f"{id_prefix}SETTXN{payment['payment_id'][len(id_prefix) + 3:]}"
                 ),
             }
         )
@@ -142,7 +142,7 @@ def generate_settlements(payments):
     return rows
 
 
-def generate_bank_transactions(settlements):
+def generate_bank_transactions(settlements, id_prefix=""):
     rows = []
 
     for settlement in settlements:
@@ -150,7 +150,7 @@ def generate_bank_transactions(settlements):
             {
                 "chain_id": settlement["chain_id"],
                 "transaction_id": (
-                    f"BTX{settlement['settlement_id'][3:]}"
+                    f"{id_prefix}BTX{settlement['settlement_id'][len(id_prefix) + 3:]}"
                 ),
                 "transaction_date": (
                     settlement["settlement_date"]
@@ -170,20 +170,35 @@ def generate_bank_transactions(settlements):
     return rows
 
 
-def generate_dataset(n):
+def generate_dataset(n, seed=SEED, id_prefix=""):
     if not isinstance(n, int):
         raise TypeError("n must be an integer")
 
     if n <= 0:
         raise ValueError("n must be greater than 0")
 
-    rng = random.Random(SEED)
+    rng = random.Random(seed)
 
-    orders = generate_orders(n, rng)
-    payments = generate_payments(orders, rng)
-    settlements = generate_settlements(payments)
+    orders = generate_orders(
+        n,
+        rng,
+        id_prefix=id_prefix,
+    )
+
+    payments = generate_payments(
+        orders,
+        rng,
+        id_prefix=id_prefix,
+    )
+
+    settlements = generate_settlements(
+        payments,
+        id_prefix=id_prefix,
+    )
+
     bank_transactions = generate_bank_transactions(
-        settlements
+        settlements,
+        id_prefix=id_prefix,
     )
 
     return (
