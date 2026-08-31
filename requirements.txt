@@ -9,3 +9,4 @@ scikit-learn
 pytest
 httpx
 python-multipart
+rapidfuzz
