@@ -186,6 +186,7 @@ def apply_exceptions(
     banks,
     rng,
     rates=None,
+    events=None,
 ):
     """
     Apply controlled corruption to an already-clean dataset.
@@ -205,6 +206,9 @@ def apply_exceptions(
 
     if rates is None:
         rates = DEFAULT_EXCEPTION_RATES.copy()
+
+    if events is None:
+        events = []
 
     # Deep-copy all datasets so the clean source remains untouched.
     orders = deepcopy(orders)
@@ -291,6 +295,16 @@ def apply_exceptions(
         )
 
         if bank is not None:
+            events.append(
+                {
+                    "exception_type": "DATE_DRIFT",
+                    "chain_id": settlement["chain_id"],
+                    "payment_id": settlement["payment_id"],
+                    "settlement_id": settlement["settlement_id"],
+                    "bank_transaction_id": bank["transaction_id"],
+                }
+            )
+
             apply_date_drift(
                 settlement,
                 bank,
@@ -308,6 +322,16 @@ def apply_exceptions(
         )
 
         if bank is not None:
+            events.append(
+                {
+                    "exception_type": "AMOUNT_MISMATCH",
+                    "chain_id": settlement["chain_id"],
+                    "payment_id": settlement["payment_id"],
+                    "settlement_id": settlement["settlement_id"],
+                    "bank_transaction_id": bank["transaction_id"],
+                }
+            )
+
             apply_amount_mismatch(bank)
 
     # ---------------------------------------------------------
@@ -316,15 +340,47 @@ def apply_exceptions(
     for index in missing_bank_indices:
         settlement = settlements[index]
 
-        apply_missing_bank(
-            settlement,
-            banks,
+        bank = bank_by_reference.get(
+            settlement["settlement_reference"]
         )
+
+        if bank is not None:
+            events.append(
+                {
+                    "exception_type": "MISSING_BANK",
+                    "chain_id": settlement["chain_id"],
+                    "payment_id": settlement["payment_id"],
+                    "settlement_id": settlement["settlement_id"],
+                    "bank_transaction_id": bank["transaction_id"],
+                }
+            )
+
+            apply_missing_bank(
+                settlement,
+                banks,
+            )
 
     # ---------------------------------------------------------
     # 4. DUPLICATE
     # ---------------------------------------------------------
     for index in duplicate_indices:
+        settlement = settlements[index]
+
+        bank = bank_by_reference.get(
+            settlement["settlement_reference"]
+        )
+
+        if bank is not None:
+            events.append(
+                {
+                    "exception_type": "DUPLICATE",
+                    "chain_id": settlement["chain_id"],
+                    "payment_id": settlement["payment_id"],
+                    "settlement_id": settlement["settlement_id"],
+                    "bank_transaction_id": bank["transaction_id"],
+                }
+            )
+
         apply_duplicate(
             settlements,
             banks,
@@ -342,6 +398,16 @@ def apply_exceptions(
         )
 
         if bank is not None:
+            events.append(
+                {
+                    "exception_type": "FUZZY_REFERENCE",
+                    "chain_id": settlement["chain_id"],
+                    "payment_id": settlement["payment_id"],
+                    "settlement_id": settlement["settlement_id"],
+                    "bank_transaction_id": bank["transaction_id"],
+                }
+            )
+
             apply_fuzzy_reference(
                 settlement,
                 bank,
@@ -351,6 +417,23 @@ def apply_exceptions(
     # 6. PARTIAL SETTLEMENT
     # ---------------------------------------------------------
     for index in partial_settlement_indices:
+        settlement = settlements[index]
+
+        bank = bank_by_reference.get(
+            settlement["settlement_reference"]
+        )
+
+        if bank is not None:
+            events.append(
+                {
+                    "exception_type": "PARTIAL_SETTLEMENT",
+                    "chain_id": settlement["chain_id"],
+                    "payment_id": settlement["payment_id"],
+                    "settlement_id": settlement["settlement_id"],
+                    "bank_transaction_id": bank["transaction_id"],
+                }
+            )
+
         apply_partial_settlement(
             settlements,
             index,
@@ -364,6 +447,38 @@ def apply_exceptions(
     while len(combined_indices) >= 2:
         first_index = combined_indices.pop()
         second_index = combined_indices.pop()
+
+        first_settlement = settlements[first_index]
+        second_settlement = settlements[second_index]
+
+        first_bank = bank_by_reference.get(
+            first_settlement["settlement_reference"]
+        )
+
+        second_bank = bank_by_reference.get(
+            second_settlement["settlement_reference"]
+        )
+
+        if first_bank is not None and second_bank is not None:
+            events.append(
+                {
+                    "exception_type": "COMBINED_SETTLEMENT",
+                    "chain_id": first_settlement["chain_id"],
+                    "payment_id": first_settlement["payment_id"],
+                    "settlement_id": first_settlement["settlement_id"],
+                    "bank_transaction_id": first_bank["transaction_id"],
+                }
+            )
+
+            events.append(
+                {
+                    "exception_type": "COMBINED_SETTLEMENT",
+                    "chain_id": second_settlement["chain_id"],
+                    "payment_id": second_settlement["payment_id"],
+                    "settlement_id": second_settlement["settlement_id"],
+                    "bank_transaction_id": first_bank["transaction_id"],
+                }
+            )
 
         apply_combined_settlement(
             settlements,
