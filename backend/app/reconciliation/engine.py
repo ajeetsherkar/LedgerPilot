@@ -1,190 +1,269 @@
+from dataclasses import dataclass
+from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
-import csv
 
-from .models import ReconciliationResult
-from .exceptions import classify_exception
+import pandas as pd
 
 
-DATA_DIR = Path(__file__).resolve().parents[3] / "data"
+DATA_DIR = Path("data")
 
 
-def load_csv(filename: str) -> list[dict]:
-    file_path = DATA_DIR / filename
+@dataclass
+class ReconciliationResult:
+    order_id: str
+    payment_id: str
+    settlement_id: str
+    bank_transaction_id: str | None
 
-    with open(file_path, "r", newline="", encoding="utf-8") as file:
-        return list(csv.DictReader(file))
+    payment_status: str
+    settlement_status: str
+    bank_status: str
+
+    expected_amount: float
+    paid_amount: float
+    settled_amount: float
+    bank_amount: float | None
+
+    difference: float
+    reconciliation_status: str
+    exception_type: str | None
 
 
 def load_datasets():
-    orders = load_csv("orders.csv")
-    payments = load_csv("payments.csv")
-    settlements = load_csv("settlements.csv")
-    bank_transactions = load_csv("bank.csv")
+    """
+    Load the clean LedgerPilot datasets.
+    """
 
-    return orders, payments, settlements, bank_transactions
+    orders = pd.read_csv(DATA_DIR / "orders.csv")
+    payments = pd.read_csv(DATA_DIR / "payments.csv")
+    settlements = pd.read_csv(DATA_DIR / "settlements.csv")
+    bank_transactions = pd.read_csv(DATA_DIR / "bank.csv")
+
+    return (
+        orders.to_dict("records"),
+        payments.to_dict("records"),
+        settlements.to_dict("records"),
+        bank_transactions.to_dict("records"),
+    )
+
+
+def _to_decimal(value):
+    return Decimal(str(value))
+
+
+def _expected_settlement_amount(settlement):
+    """
+    Calculate the expected settlement net amount
+    from gross amount, platform fee and GST.
+    """
+
+    gross = _to_decimal(settlement["gross_amount"])
+
+    platform_fee = (
+        gross * Decimal("0.01")
+    ).quantize(
+        Decimal("0.01"),
+        rounding=ROUND_HALF_UP,
+    )
+
+    gst_on_fee = (
+        platform_fee * Decimal("0.18")
+    ).quantize(
+        Decimal("0.01"),
+        rounding=ROUND_HALF_UP,
+    )
+
+    return (
+        gross
+        - platform_fee
+        - gst_on_fee
+    ).quantize(
+        Decimal("0.01"),
+        rounding=ROUND_HALF_UP,
+    )
 
 
 def reconcile_order(
-    order: dict,
-    payment: dict | None,
-    settlement: dict | None,
-    bank_transaction: dict | None,
-) -> ReconciliationResult:
+    order,
+    payment,
+    settlement,
+    bank,
+):
+    """
+    Reconcile one complete order -> payment ->
+    settlement -> bank chain.
+    """
 
-    order_amount = float(order["order_amount"])
+    expected_amount = _to_decimal(
+        order["order_amount"]
+    )
 
-    # ---- Stage 1: Payment ----
-    if payment is None:
-        payment_status = "MISSING"
-        payment_amount = None
-        payment_difference = None
-    else:
-        payment_amount = float(payment["amount"])
-        payment_difference = payment_amount - order_amount
+    paid_amount = _to_decimal(
+        payment["amount"]
+    )
 
-        payment_status = (
-            "MATCHED"
-            if abs(payment_difference) < 0.01
-            else "MISMATCH"
-        )
+    settled_amount = _to_decimal(
+        settlement["net_amount"]
+    )
 
-    # ---- Stage 2: Settlement ----
-    if settlement is None:
-        settlement_status = "MISSING"
-        net_amount = None
-        settlement_difference = None
-    else:
-        gross_amount = float(settlement["gross_amount"])
-        platform_fee = float(settlement["platform_fee"])
-        gst_on_fee = float(settlement["gst_on_fee"])
-        net_amount = float(settlement["net_amount"])
+    expected_settlement = _expected_settlement_amount(
+        settlement
+    )
 
-        expected_net_amount = (
-            gross_amount
-            - platform_fee
-            - gst_on_fee
-        )
+    bank_amount = (
+        _to_decimal(bank["credit_amount"])
+        if bank is not None
+        else None
+    )
 
-        settlement_difference = (
-            net_amount - expected_net_amount
-        )
+    payment_status = "MATCHED"
+    settlement_status = "MATCHED"
+    bank_status = "MATCHED"
 
-        settlement_status = (
-            "MATCHED"
-            if abs(settlement_difference) < 0.01
-            else "MISMATCH"
-        )
+    difference = Decimal("0.00")
+    exception_type = None
 
-    # ---- Stage 3: Bank ----
-    if bank_transaction is None or net_amount is None:
-        bank_status = "MISSING"
-        bank_amount = None
-        bank_difference = None
-    else:
-        bank_amount = float(bank_transaction["credit_amount"])
+    # ---------------------------------------------------------
+    # 1. ORDER -> PAYMENT
+    # ---------------------------------------------------------
 
-        bank_difference = (
-            bank_amount - net_amount
-        )
+    payment_difference = (
+        paid_amount - expected_amount
+    )
 
-        bank_status = (
-            "MATCHED"
-            if abs(bank_difference) < 0.01
-            else "MISMATCH"
-        )
-
-    # ---- Exception priority: PAYMENT > SETTLEMENT > BANK ----
-    if payment_status == "MISMATCH":
-        exception_type = "PAYMENT_MISMATCH"
+    if payment_difference != Decimal("0.00"):
+        payment_status = "MISMATCH"
         difference = abs(payment_difference)
+        exception_type = "PAYMENT_MISMATCH"
 
-    elif payment_status == "MISSING":
-        exception_type = "PAYMENT_MISSING"
-        difference = 0.0
+    # ---------------------------------------------------------
+    # 2. EXPECTED SETTLEMENT -> ACTUAL SETTLEMENT
+    # ---------------------------------------------------------
 
-    elif settlement_status == "MISMATCH":
-        exception_type = "SETTLEMENT_MISMATCH"
-        difference = abs(settlement_difference)
+    settlement_difference = (
+        settled_amount - expected_settlement
+    )
 
-    elif settlement_status == "MISSING":
-        exception_type = "SETTLEMENT_MISSING"
-        difference = 0.0
+    if settlement_difference != Decimal("0.00"):
+        settlement_status = "MISMATCH"
 
-    elif bank_status == "MISMATCH":
-        exception_type = "BANK_MISMATCH"
-        difference = abs(bank_difference)
+        if exception_type is None:
+            difference = abs(settlement_difference)
+            exception_type = "SETTLEMENT_MISMATCH"
 
-    elif bank_status == "MISSING":
-        exception_type = "BANK_MISSING"
-        difference = 0.0
+    # ---------------------------------------------------------
+    # 3. SETTLEMENT -> BANK
+    # ---------------------------------------------------------
+
+    if bank is None:
+        bank_status = "MISSING"
+
+        if exception_type is None:
+            exception_type = "MISSING_BANK"
 
     else:
-        exception_type = None
-        difference = 0.0
+        bank_difference = (
+            bank_amount - settled_amount
+        )
 
-    if exception_type:
-        reconciliation_status = "EXCEPTION"
-    else:
-        reconciliation_status = "MATCHED"
+        if bank_difference != Decimal("0.00"):
+            bank_status = "MISMATCH"
 
-    result = ReconciliationResult(
-        order_id=order["order_id"],
+            if exception_type is None:
+                difference = abs(bank_difference)
+                exception_type = "BANK_MISMATCH"
+
+    # ---------------------------------------------------------
+    # FINAL STATUS
+    # ---------------------------------------------------------
+
+    reconciliation_status = (
+        "MATCHED"
+        if exception_type is None
+        else "EXCEPTION"
+    )
+
+    return ReconciliationResult(
+        order_id=str(order["order_id"]),
+        payment_id=str(payment["payment_id"]),
+        settlement_id=str(settlement["settlement_id"]),
+        bank_transaction_id=(
+            str(bank["transaction_id"])
+            if bank is not None
+            else None
+        ),
         payment_status=payment_status,
         settlement_status=settlement_status,
         bank_status=bank_status,
-        expected_amount=order_amount,
-        paid_amount=payment_amount,
-        settled_amount=net_amount,
-        bank_amount=bank_amount,
-        difference=difference,
+        expected_amount=float(expected_amount),
+        paid_amount=float(paid_amount),
+        settled_amount=float(settled_amount),
+        bank_amount=(
+            float(bank_amount)
+            if bank_amount is not None
+            else None
+        ),
+        difference=float(difference),
         reconciliation_status=reconciliation_status,
         exception_type=exception_type,
     )
 
-    return result
 
-def reconcile_all() -> list[ReconciliationResult]:
-    orders, payments, settlements, bank_transactions = load_datasets()
+def reconcile_all():
+    """
+    Reconcile every clean order/payment/
+    settlement/bank chain.
+    """
+
+    (
+        orders,
+        payments,
+        settlements,
+        banks,
+    ) = load_datasets()
 
     payments_by_order = {
         payment["order_id"]: payment
         for payment in payments
     }
 
-    settlements_by_payment_id = {
+    settlements_by_payment = {
         settlement["payment_id"]: settlement
         for settlement in settlements
     }
 
-    bank_by_reference = {
-        transaction["reference"]: transaction
-        for transaction in bank_transactions
+    banks_by_reference = {
+        bank["reference"]: bank
+        for bank in banks
     }
 
     results = []
 
     for order in orders:
-        order_id = order["order_id"]
 
-        payment = payments_by_order.get(order_id)
+        payment = payments_by_order.get(
+            order["order_id"]
+        )
 
-        settlement = None
-        if payment:
-            payment_id = payment["payment_id"]
-            settlement = settlements_by_payment_id.get(payment_id)
+        if payment is None:
+            continue
 
-        bank_transaction = None
-        if settlement:
-            settlement_reference = settlement["settlement_reference"]
-            bank_transaction = bank_by_reference.get(
-                settlement_reference
-            )
+        settlement = settlements_by_payment.get(
+            payment["payment_id"]
+        )
+
+        if settlement is None:
+            continue
+
+        bank = banks_by_reference.get(
+            settlement["settlement_reference"]
+        )
 
         result = reconcile_order(
             order,
             payment,
             settlement,
-            bank_transaction,
+            bank,
         )
 
         results.append(result)
