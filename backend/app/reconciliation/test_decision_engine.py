@@ -218,3 +218,68 @@ def test_decision_contains_explanation():
 
     assert result.reason
     assert isinstance(result.reason, str)
+
+def test_similarity_fallback_matches_bank_candidate():
+    chain = make_chain(
+        bank_reference="WRONG_REFERENCE",
+        bank_amount="1000.00",
+        bank_date="2026-08-24",
+    )
+
+    bank_candidates = [
+        {
+            "transaction_id": "BANK999",
+            "reference": "SETTXN001",
+            "credit_amount": "1000.00",
+            "transaction_date": "2026-08-24",
+        }
+    ]
+
+    result = decide_chain(
+        chain,
+        bank_candidates=bank_candidates,
+    )
+
+    assert result.status == "MATCH"
+    assert result.method == "SIMILARITY"
+    assert result.candidate == bank_candidates[0]
+
+def test_similarity_fallback_can_require_review():
+    chain = make_chain(
+        bank_reference="WRONG_REFERENCE",
+        bank_amount="950.00",
+        bank_date="2026-08-26",
+    )
+
+    bank_candidates = [
+        {
+            "transaction_id": "BANK999",
+            "reference": "SETTXN001",
+            "credit_amount": "950.00",
+            "transaction_date": "2026-08-26",
+        }
+    ]
+
+    result = decide_chain(
+        chain,
+        bank_candidates=bank_candidates,
+    )
+
+    assert result.status in {"REVIEW", "MATCH"}
+    assert result.method == "SIMILARITY"
+
+def test_similarity_fallback_without_candidates_remains_unresolved():
+    chain = make_chain(
+        bank_reference="WRONG_REFERENCE",
+        bank_amount="900.00",
+        bank_date="2026-08-30",
+    )
+
+    result = decide_chain(
+        chain,
+        bank_candidates=[],
+    )
+
+    assert result.status == "UNRESOLVED"
+    assert result.method == "NONE"
+    assert result.confidence == 0.0
