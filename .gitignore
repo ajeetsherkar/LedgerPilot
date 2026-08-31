@@ -46,3 +46,4 @@ dist/
 *.egg-info/
 # Held-out benchmark ground truth — keep private/frozen
 data/ground_truth/heldout_ground_truth.csv
+data/*.db

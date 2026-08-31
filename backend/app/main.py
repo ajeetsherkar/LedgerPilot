@@ -1,6 +1,8 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, File, UploadFile
 
+from backend.app.database import initialize_database
 from backend.app.reconciliation.engine import reconcile_all
+from backend.app.reconciliation.ingestion import ingest_csv_files
 
 
 app = FastAPI(
@@ -10,11 +12,36 @@ app = FastAPI(
 )
 
 
+@app.on_event("startup")
+def startup():
+    initialize_database()
+
+
 @app.get("/health")
 def health_check():
     return {
         "status": "healthy",
         "service": "LedgerPilot",
+    }
+
+
+@app.post("/upload")
+def upload_csv_files(
+    orders: UploadFile = File(...),
+    payments: UploadFile = File(...),
+    settlements: UploadFile = File(...),
+    bank: UploadFile = File(...),
+):
+    result = ingest_csv_files(
+        orders_file=orders,
+        payments_file=payments,
+        settlements_file=settlements,
+        bank_file=bank,
+    )
+
+    return {
+        "status": "success",
+        **result,
     }
 
 
