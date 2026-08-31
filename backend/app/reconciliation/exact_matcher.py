@@ -36,14 +36,12 @@ def _valid_date_sequence(
     bank: dict[str, Any],
 ) -> bool:
     """
-    Verify chronological transaction flow:
+    Verify exact transaction dates.
 
-        Order -> Payment -> Settlement -> Bank
-
-    Session 4 only verifies chronological validity.
-    Configurable date tolerances are introduced later
-    in Session 6.
+    Exact matching requires all transaction dates
+    to occur on the same date.
     """
+
     try:
         order_date = normalize_date(order["order_date"])
         payment_date = normalize_date(payment["payment_date"])
@@ -57,12 +55,10 @@ def _valid_date_sequence(
         return False
 
     return (
-        order_date
-        <= payment_date
-        <= settlement_date
-        <= bank_date
+        order_date <= payment_date
+        and payment_date <= settlement_date
+        and settlement_date <= bank_date
     )
-
 
 def exact_match(chain: TransactionChain) -> bool:
     """
