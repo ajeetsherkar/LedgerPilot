@@ -12,6 +12,9 @@ def make_result(
 ):
     return ReconciliationResult(
         order_id="TEST001",
+        payment_id="PAY001",
+        settlement_id="SET001",
+        bank_transaction_id="BANK001",
         payment_status=payment_status,
         settlement_status=settlement_status,
         bank_status=bank_status,

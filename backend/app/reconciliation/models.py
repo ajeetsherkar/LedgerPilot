@@ -4,7 +4,16 @@ from typing import Optional
 
 @dataclass
 class ReconciliationResult:
+    """
+    Represents the final reconciliation result for
+    an Order -> Payment -> Settlement -> Bank chain.
+    """
+
     order_id: str
+
+    payment_id: Optional[str]
+    settlement_id: Optional[str]
+    bank_transaction_id: Optional[str]
 
     payment_status: str
     settlement_status: str
@@ -17,4 +26,4 @@ class ReconciliationResult:
 
     difference: float
     reconciliation_status: str
-    exception_type: str
+    exception_type: Optional[str]

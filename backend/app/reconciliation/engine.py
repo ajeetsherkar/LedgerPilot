@@ -1,32 +1,12 @@
-from dataclasses import dataclass
 from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 
 import pandas as pd
 
+from backend.app.reconciliation.models import ReconciliationResult
+
 
 DATA_DIR = Path("data")
-
-
-@dataclass
-class ReconciliationResult:
-    order_id: str
-    payment_id: str
-    settlement_id: str
-    bank_transaction_id: str | None
-
-    payment_status: str
-    settlement_status: str
-    bank_status: str
-
-    expected_amount: float
-    paid_amount: float
-    settled_amount: float
-    bank_amount: float | None
-
-    difference: float
-    reconciliation_status: str
-    exception_type: str | None
 
 
 def load_datasets():
