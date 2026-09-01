@@ -1,3 +1,4 @@
+from backend.app.reconciliation.confidence import ConfidenceBucket
 from backend.app.reconciliation.decision_engine import (
     MatchDecision,
     decide_chain,
@@ -60,15 +61,36 @@ def make_chain(
     )
 
 
-def test_exact_match_has_highest_priority():
+def test_exact_match_has_high_confidence_bucket():
     chain = make_chain()
 
     result = decide_chain(chain)
 
-    assert isinstance(result, MatchDecision)
     assert result.status == "MATCH"
     assert result.method == "EXACT"
     assert result.confidence == 1.0
+    assert result.confidence_bucket == ConfidenceBucket.HIGH
+
+
+def test_exact_match_gets_high_confidence_bucket():
+    chain = make_chain()
+
+    result = decide_chain(chain)
+
+    assert result.confidence == 1.0
+    assert result.confidence_bucket == ConfidenceBucket.HIGH
+
+
+def test_payment_mismatch_remains_exception_with_high_confidence():
+    chain = make_chain(
+        payment_amount="900.00",
+    )
+
+    result = decide_chain(chain)
+
+    assert result.status == "EXCEPTION"
+    assert result.confidence == 1.0
+    assert result.confidence_bucket == ConfidenceBucket.HIGH
 
 
 def test_fee_aware_match_is_selected_when_exact_fails():
@@ -126,6 +148,23 @@ def test_no_deterministic_match_is_unresolved():
     assert result.status == "UNRESOLVED"
     assert result.method == "NONE"
     assert result.confidence == 0.0
+
+
+def test_unresolved_has_low_confidence_bucket():
+    chain = make_chain(
+        bank_reference="WRONG_REFERENCE",
+        bank_amount="900.00",
+        bank_date="2026-08-30",
+    )
+
+    result = decide_chain(
+        chain,
+        bank_candidates=[],
+    )
+
+    assert result.status == "UNRESOLVED"
+    assert result.confidence == 0.0
+    assert result.confidence_bucket == ConfidenceBucket.LOW
 
 
 def test_empty_candidates_return_none():
@@ -267,6 +306,70 @@ def test_similarity_fallback_can_require_review():
 
     assert result.status in {"REVIEW", "MATCH"}
     assert result.method == "SIMILARITY"
+
+
+def test_similarity_confidence_bucket_is_based_on_score():
+    chain = make_chain(
+        bank_reference="WRONG_REFERENCE",
+        bank_amount="950.00",
+        bank_date="2026-08-26",
+    )
+
+    bank_candidates = [
+        {
+            "transaction_id": "BANK999",
+            "reference": "SETTXN001",
+            "credit_amount": "950.00",
+            "transaction_date": "2026-08-26",
+        }
+    ]
+
+    result = decide_chain(
+        chain,
+        bank_candidates=bank_candidates,
+    )
+
+    assert result.method == "SIMILARITY"
+
+    expected_bucket = (
+        ConfidenceBucket.HIGH
+        if result.confidence >= 0.90
+        else (
+            ConfidenceBucket.MEDIUM
+            if result.confidence >= 0.70
+            else ConfidenceBucket.LOW
+        )
+    )
+
+    assert result.confidence_bucket == expected_bucket
+
+def test_similarity_review_gets_medium_or_low_bucket():
+    chain = make_chain(
+        bank_reference="WRONG_REFERENCE",
+        bank_amount="950.00",
+        bank_date="2026-08-26",
+    )
+
+    bank_candidates = [
+        {
+            "transaction_id": "BANK999",
+            "reference": "SETTXN001",
+            "credit_amount": "950.00",
+            "transaction_date": "2026-08-26",
+        }
+    ]
+
+    result = decide_chain(
+        chain,
+        bank_candidates=bank_candidates,
+    )
+
+    assert result.method == "SIMILARITY"
+    assert result.confidence_bucket in {
+        ConfidenceBucket.MEDIUM,
+        ConfidenceBucket.LOW,
+    }
+
 
 def test_similarity_fallback_without_candidates_remains_unresolved():
     chain = make_chain(

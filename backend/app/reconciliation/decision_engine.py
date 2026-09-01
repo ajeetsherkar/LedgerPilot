@@ -18,6 +18,12 @@ from backend.app.reconciliation.similarity_scorer import (
     score_candidates,
 )
 
+from backend.app.reconciliation.confidence import (
+    ConfidenceBucket,
+    ConfidenceThresholds,
+    classify_confidence,
+)
+
 
 # ---------------------------------------------------------
 # SESSION 9 CONFIGURATION
@@ -32,31 +38,50 @@ SIMILARITY_MATCH_THRESHOLD = 0.80
 SIMILARITY_REVIEW_THRESHOLD = 0.64
 MIN_SCORE_MARGIN = 0.05
 
+DEFAULT_CONFIDENCE_THRESHOLDS = ConfidenceThresholds(
+    high=0.90,
+    medium=0.70,
+)
+
 
 @dataclass
 class MatchDecision:
     """
     Final reconciliation decision for a transaction chain.
-
-    status:
-        MATCH
-        REVIEW
-        UNRESOLVED
-        EXCEPTION
-
-    method:
-        EXACT
-        FEE_AWARE
-        DATE_WINDOW
-        SIMILARITY
-        NONE
     """
 
     status: str
     method: str
     confidence: float
-    reason: str
+    confidence_bucket: ConfidenceBucket = ConfidenceBucket.LOW
+    reason: str = ""
     candidate: Optional[dict[str, Any]] = None
+    order_id: Optional[str] = None
+    payment_id: Optional[str] = None
+    settlement_id: Optional[str] = None
+    bank_transaction_id: Optional[str] = None
+
+
+def _add_confidence_bucket(
+    decision: MatchDecision,
+) -> MatchDecision:
+    decision.confidence_bucket = classify_confidence(
+        decision.confidence,
+        DEFAULT_CONFIDENCE_THRESHOLDS,
+    )
+    return decision
+
+
+def _with_chain_ids(
+    decision: MatchDecision,
+    chain: TransactionChain,
+) -> MatchDecision:
+    decision.order_id = chain.order_id
+    decision.payment_id = chain.payment_id
+    decision.settlement_id = chain.settlement_id
+    decision.bank_transaction_id = chain.bank_transaction_id
+
+    return decision
 
 
 def _deterministic_decision(
@@ -387,6 +412,11 @@ def decide_chain(
         Similarity Fallback (if bank_candidates provided)
               ↓
         UNRESOLVED
+
+    Every returned MatchDecision passes through
+    _add_confidence_bucket() so confidence_bucket is always
+    derived centrally from confidence, rather than being set
+    ad hoc at each call site.
     """
 
     if not isinstance(chain, TransactionChain):
@@ -397,7 +427,56 @@ def decide_chain(
     deterministic_result = _deterministic_decision(chain)
 
     if deterministic_result is not None:
-        return deterministic_result
+        return _add_confidence_bucket(
+            _with_chain_ids(
+                deterministic_result,
+                chain,
+            )
+        )
+
+    # ---------------------------------------------------------
+    # BLOCK SIMILARITY FALLBACK FOR KNOWN PAYMENT MISMATCH
+    # ---------------------------------------------------------
+
+    if (
+        chain.payment is not None
+        and chain.order is not None
+    ):
+        try:
+            order_amount = float(chain.order["order_amount"])
+            payment_amount = float(chain.payment["amount"])
+
+            if order_amount != payment_amount:
+                return _add_confidence_bucket(
+                    _with_chain_ids(
+                        MatchDecision(
+                            status="EXCEPTION",
+                            method="NONE",
+                            confidence=1.0,
+                            reason=(
+                                "Order amount does not match payment amount."
+                            ),
+                            candidate=None,
+                        ),
+                        chain,
+                    )
+                )
+        except (KeyError, TypeError, ValueError):
+            return _add_confidence_bucket(
+                _with_chain_ids(
+                    MatchDecision(
+                        status="EXCEPTION",
+                        method="NONE",
+                        confidence=1.0,
+                        reason=(
+                            "Order or payment amount could not be "
+                            "validated."
+                        ),
+                        candidate=None,
+                    ),
+                    chain,
+                )
+            )
 
     # ---------------------------------------------------------
     # SIMILARITY FALLBACK
@@ -410,15 +489,26 @@ def decide_chain(
         )
 
         if similarity_result is not None:
-            return similarity_result
+            return _add_confidence_bucket(
+                _with_chain_ids(
+                    similarity_result,
+                    chain,
+                )
+            )
 
-    return MatchDecision(
-        status="UNRESOLVED",
-        method="NONE",
-        confidence=0.0,
-        reason=(
-            "No deterministic reconciliation strategy matched "
-            "the transaction chain and no similarity candidate "
-            "produced a reviewable result."
-        ),
+    return _add_confidence_bucket(
+        _with_chain_ids(
+            MatchDecision(
+                status="UNRESOLVED",
+                method="NONE",
+                confidence=0.0,
+                reason=(
+                    "No deterministic reconciliation strategy matched "
+                    "the transaction chain and no similarity candidate "
+                    "produced a reviewable result."
+                ),
+                candidate=None,
+            ),
+            chain,
+        )
     )

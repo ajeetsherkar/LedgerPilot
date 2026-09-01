@@ -1,7 +1,12 @@
 from fastapi import FastAPI, File, UploadFile
 
 from backend.app.database import initialize_database
-from backend.app.reconciliation.engine import reconcile_all
+
+from backend.app.reconciliation.engine import load_datasets
+
+from backend.app.reconciliation.batch_loader import load_batch
+from backend.app.reconciliation.pipeline import reconcile_all
+
 from backend.app.reconciliation.ingestion import ingest_csv_files
 
 
@@ -45,33 +50,54 @@ def upload_csv_files(
     }
 
 
-@app.get("/reconciliation")
-def reconciliation():
-    results = reconcile_all()
+@app.get("/reconciliation/{batch_id}")
+def reconciliation(batch_id: str):
+    (
+        orders,
+        payments,
+        settlements,
+        banks,
+    ) = load_batch(batch_id)
+
+    results = reconcile_all(
+        orders,
+        payments,
+        settlements,
+        banks,
+        bank_candidates=banks,
+    )
 
     return {
+        "batch_id": batch_id,
         "total": len(results),
         "matched": sum(
-            result.reconciliation_status == "MATCHED"
+            result.status == "MATCH"
+            for result in results
+        ),
+        "review": sum(
+            result.status == "REVIEW"
+            for result in results
+        ),
+        "unresolved": sum(
+            result.status == "UNRESOLVED"
             for result in results
         ),
         "exceptions": sum(
-            result.reconciliation_status == "EXCEPTION"
+            result.status == "EXCEPTION"
             for result in results
         ),
         "results": [
             {
                 "order_id": result.order_id,
-                "payment_status": result.payment_status,
-                "settlement_status": result.settlement_status,
-                "bank_status": result.bank_status,
-                "expected_amount": result.expected_amount,
-                "paid_amount": result.paid_amount,
-                "settled_amount": result.settled_amount,
-                "bank_amount": result.bank_amount,
-                "difference": result.difference,
-                "reconciliation_status": result.reconciliation_status,
-                "exception_type": result.exception_type,
+                "payment_id": result.payment_id,
+                "settlement_id": result.settlement_id,
+                "bank_transaction_id": result.bank_transaction_id,
+                "status": result.status,
+                "method": result.method,
+                "confidence": result.confidence,
+                "confidence_bucket": result.confidence_bucket,
+                "reason": result.reason,
+                "candidate": result.candidate,
             }
             for result in results
         ],
