@@ -197,3 +197,94 @@ def test_missing_bank_does_not_crash_pipeline():
         "UNRESOLVED",
         "REVIEW",
     }
+
+def test_similarity_fallback_matches_correct_bank_candidate():
+    from backend.app.reconciliation.relationship_builder import (
+        build_transaction_chains,
+    )
+    from backend.app.reconciliation.decision_engine import (
+        decide_chain,
+    )
+    from scripts.generate_data import generate_dataset
+
+    orders, payments, settlements, banks = generate_dataset(20)
+
+    # Build chains without bank records so that
+    # the similarity fallback is actually exercised.
+    chains = build_transaction_chains(
+        orders,
+        payments,
+        settlements,
+        [],
+    )
+
+    decisions = [
+        decide_chain(
+            chain,
+            bank_candidates=banks,
+        )
+        for chain in chains
+    ]
+
+    assert len(decisions) == 20
+    assert all(
+        decision.status == "MATCH"
+        for decision in decisions
+    )
+    assert all(
+        decision.method == "SIMILARITY"
+        for decision in decisions
+    )
+
+
+def test_unrelated_bank_candidates_do_not_auto_match():
+    from backend.app.reconciliation.relationship_builder import (
+        build_transaction_chains,
+    )
+    from backend.app.reconciliation.decision_engine import (
+        decide_chain,
+    )
+    from scripts.generate_data import generate_dataset
+
+    orders, payments, settlements, banks = generate_dataset(20)
+
+    # Remove bank relationships from the chains.
+    chains = build_transaction_chains(
+        orders,
+        payments,
+        settlements,
+        [],
+    )
+
+    unrelated_candidates = [
+        {
+            "transaction_id": f"BAD-{i}",
+            "reference": f"UNRELATED-{i}",
+            "credit_amount": "999999.00",
+            "transaction_date": "2099-01-01",
+            "currency": "INR",
+        }
+        for i in range(20)
+    ]
+
+    decisions = [
+        decide_chain(
+            chain,
+            bank_candidates=unrelated_candidates,
+        )
+        for chain in chains
+    ]
+
+    assert len(decisions) == 20
+
+    # Unrelated candidates must never be
+    # automatically accepted as matches.
+    assert all(
+        decision.status != "MATCH"
+        for decision in decisions
+    )
+
+    assert all(
+        decision.status == "UNRESOLVED"
+        for decision in decisions
+    )
