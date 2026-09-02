@@ -45,3 +45,37 @@ def reason_about_reconciliation(
         "recommendation": None,
         "evidence": evidence,
     }
+
+
+def safely_process_ai_response(
+    evidence: dict[str, Any],
+    response: Any,
+) -> dict[str, Any]:
+    """
+    Production safety boundary for AI-generated reconciliation output.
+
+    The raw AI response is never trusted directly. It must first pass
+    Pydantic validation. Any malformed, incomplete, out-of-range, or
+    unexpected response automatically falls back to HUMAN_REVIEW.
+    """
+
+    if not isinstance(evidence, dict):
+        raise TypeError("evidence must be a dictionary")
+
+    try:
+        validated = validate_ai_response(response)
+    except (TypeError, ValueError):
+        return {
+            "status": "HUMAN_REVIEW",
+            "reason": "AI response failed validation.",
+            "evidence": evidence,
+        }
+
+    return {
+        "status": "AI_VALIDATED",
+        "classification": validated.classification,
+        "recommended_action": validated.recommended_action,
+        "reason": validated.reason,
+        "confidence": validated.confidence,
+        "evidence": evidence,
+    }

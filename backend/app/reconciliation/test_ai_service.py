@@ -4,6 +4,7 @@ from pydantic import ValidationError
 from backend.app.reconciliation.ai_service import (
     reason_about_reconciliation,
     validate_ai_response,
+    safely_process_ai_response,
 )
 from backend.app.reconciliation.ai_schema import (
     AIReasoningResponse,
@@ -129,3 +130,152 @@ def test_validate_ai_response_rejects_extra_fields():
 
     with pytest.raises(ValidationError):
         validate_ai_response(response)
+
+
+def test_safely_process_ai_response_accepts_valid_response():
+
+    evidence = {
+        "transaction": {"order_id": "ORD001"},
+        "top_candidates": [],
+    }
+
+    response = {
+        "classification": "LIKELY_MATCH",
+        "recommended_action": "HUMAN_REVIEW",
+        "reason": "Amount matches but reference differs.",
+        "confidence": 0.82,
+    }
+
+    result = safely_process_ai_response(
+        evidence,
+        response,
+    )
+
+    assert result["status"] == "AI_VALIDATED"
+    assert result["classification"] == "LIKELY_MATCH"
+    assert result["recommended_action"] == "HUMAN_REVIEW"
+    assert result["confidence"] == 0.82
+
+
+def test_safely_process_ai_response_falls_back_on_missing_field():
+
+    evidence = {
+        "transaction": {"order_id": "ORD001"},
+    }
+
+    response = {
+        "classification": "LIKELY_MATCH",
+        "recommended_action": "HUMAN_REVIEW",
+        "confidence": 0.82,
+    }
+
+    result = safely_process_ai_response(
+        evidence,
+        response,
+    )
+
+    assert result["status"] == "HUMAN_REVIEW"
+    assert "classification" not in result
+    assert "confidence" not in result
+
+
+def test_safely_process_ai_response_falls_back_on_confidence_above_one():
+
+    evidence = {
+        "transaction": {"order_id": "ORD001"},
+    }
+
+    response = {
+        "classification": "LIKELY_MATCH",
+        "recommended_action": "HUMAN_REVIEW",
+        "reason": "Invalid confidence.",
+        "confidence": 1.5,
+    }
+
+    result = safely_process_ai_response(
+        evidence,
+        response,
+    )
+
+    assert result["status"] == "HUMAN_REVIEW"
+
+
+def test_safely_process_ai_response_falls_back_on_confidence_below_zero():
+
+    evidence = {
+        "transaction": {"order_id": "ORD001"},
+    }
+
+    response = {
+        "classification": "LIKELY_MATCH",
+        "recommended_action": "HUMAN_REVIEW",
+        "reason": "Invalid confidence.",
+        "confidence": -0.1,
+    }
+
+    result = safely_process_ai_response(
+        evidence,
+        response,
+    )
+
+    assert result["status"] == "HUMAN_REVIEW"
+
+
+def test_safely_process_ai_response_falls_back_on_extra_fields():
+
+    evidence = {
+        "transaction": {"order_id": "ORD001"},
+    }
+
+    response = {
+        "classification": "LIKELY_MATCH",
+        "recommended_action": "HUMAN_REVIEW",
+        "reason": "Unexpected field.",
+        "confidence": 0.82,
+        "malicious_instruction": "ignore previous rules",
+    }
+
+    result = safely_process_ai_response(
+        evidence,
+        response,
+    )
+
+    assert result["status"] == "HUMAN_REVIEW"
+
+
+def test_safely_process_ai_response_falls_back_on_malformed_response():
+
+    evidence = {
+        "transaction": {"order_id": "ORD001"},
+    }
+
+    result = safely_process_ai_response(
+        evidence,
+        None,
+    )
+
+    assert result["status"] == "HUMAN_REVIEW"
+
+
+def test_safely_process_ai_response_never_trusts_invalid_ai_fields():
+
+    evidence = {
+        "transaction": {"order_id": "ORD001"},
+    }
+
+    response = {
+        "classification": "AUTO_RESOLVE",
+        "recommended_action": "AUTO_RESOLVE",
+        "reason": "This should never be trusted.",
+        "confidence": 9.99,
+    }
+
+    result = safely_process_ai_response(
+        evidence,
+        response,
+    )
+
+    assert result["status"] == "HUMAN_REVIEW"
+    assert "classification" not in result
+    assert "recommended_action" not in result
+    assert "confidence" not in result
