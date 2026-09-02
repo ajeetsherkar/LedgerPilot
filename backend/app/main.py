@@ -98,6 +98,7 @@ def reconciliation(batch_id: str):
                 "confidence_bucket": result.confidence_bucket,
                 "reason": result.reason,
                 "candidate": result.candidate,
+                "ai_reasoning": result.ai_reasoning,
             }
             for result in results
         ],

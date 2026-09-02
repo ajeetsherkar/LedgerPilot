@@ -572,6 +572,56 @@ def test_ambiguous_similarity_candidates_yield_low_confidence_review():
     assert result.confidence_bucket == ConfidenceBucket.LOW
 
 
+def test_medium_confidence_case_routes_to_ai_reasoning(
+    monkeypatch,
+):
+    chain = make_chain(
+        bank_reference="WRONG_REFERENCE",
+        bank_amount="950.00",
+        bank_date="2026-08-26",
+    )
+
+    bank_candidates = [
+        {
+            "transaction_id": "BANK999",
+            "reference": "SETTXN001",
+            "credit_amount": "950.00",
+            "transaction_date": "2026-08-26",
+        }
+    ]
+
+    captured = {}
+
+    def fake_ai_service(evidence):
+        captured["evidence"] = evidence
+
+        return {
+            "status": "PENDING_AI_REVIEW",
+            "reasoning": "Amount matches but reference differs.",
+            "recommendation": "REVIEW",
+            "evidence": evidence,
+        }
+
+    monkeypatch.setattr(
+        "backend.app.reconciliation.decision_engine."
+        "reason_about_reconciliation",
+        fake_ai_service,
+    )
+
+    result = decide_chain(
+        chain,
+        bank_candidates=bank_candidates,
+    )
+
+    assert result.method == "SIMILARITY"
+
+    if result.confidence_bucket == ConfidenceBucket.MEDIUM:
+        assert "ai_reasoning" in result.candidate
+        assert "evidence" in captured
+        assert "transaction" in captured["evidence"]
+        assert "top_candidates" in captured["evidence"]
+
+
 def test_similarity_fallback_without_candidates_remains_unresolved():
     chain = make_chain(
         bank_reference="WRONG_REFERENCE",

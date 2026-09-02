@@ -24,6 +24,10 @@ from backend.app.reconciliation.confidence import (
     classify_confidence,
 )
 
+from backend.app.reconciliation.ai_service import (
+    reason_about_reconciliation,
+)
+
 
 # ---------------------------------------------------------
 # SESSION 9 CONFIGURATION
@@ -56,6 +60,7 @@ class MatchDecision:
     confidence_bucket: ConfidenceBucket = ConfidenceBucket.LOW
     reason: str = ""
     candidate: Optional[dict[str, Any]] = None
+    ai_reasoning: Optional[dict[str, Any]] = None
     order_id: Optional[str] = None
     payment_id: Optional[str] = None
     settlement_id: Optional[str] = None
@@ -116,6 +121,147 @@ def _with_chain_ids(
     decision.bank_transaction_id = chain.bank_transaction_id
 
     return decision
+
+
+def _calculate_numeric_delta(
+    expected: Any,
+    actual: Any,
+) -> Optional[float]:
+    try:
+        if expected is None or actual is None:
+            return None
+
+        return round(
+            float(actual) - float(expected),
+            2,
+        )
+    except (TypeError, ValueError):
+        return None
+
+
+def _calculate_date_delta(
+    expected: Any,
+    actual: Any,
+) -> Optional[int]:
+    if expected is None or actual is None:
+        return None
+
+    try:
+        from backend.app.reconciliation.normalizer import (
+            normalize_date,
+        )
+        from datetime import date
+
+        expected_normalized = normalize_date(expected)
+        actual_normalized = normalize_date(actual)
+
+        expected_date = date.fromisoformat(
+            expected_normalized
+        )
+        actual_date = date.fromisoformat(
+            actual_normalized
+        )
+
+        return (actual_date - expected_date).days
+
+    except (TypeError, ValueError):
+        return None
+
+
+def _build_ai_evidence_payload(
+    chain: TransactionChain,
+    decision: MatchDecision,
+    bank_candidates: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """
+    Build a compact evidence payload for AI reasoning.
+
+    The payload contains:
+        - transaction context
+        - top candidate records
+        - amount/date/reference mismatch details
+    """
+
+    transaction = {
+        "order": chain.order,
+        "payment": chain.payment,
+        "settlement": chain.settlement,
+        "bank": chain.bank,
+    }
+
+    top_candidates = []
+
+    for candidate in bank_candidates[:3]:
+        if not isinstance(candidate, dict):
+            continue
+
+        candidate_amount = candidate.get("credit_amount")
+        candidate_date = candidate.get("transaction_date")
+        candidate_reference = candidate.get("reference")
+
+        settlement_amount = (
+            chain.settlement.get("net_amount")
+            if chain.settlement
+            else None
+        )
+
+        settlement_date = (
+            chain.settlement.get("settlement_date")
+            if chain.settlement
+            else None
+        )
+
+        settlement_reference = (
+            chain.settlement.get("settlement_reference")
+            if chain.settlement
+            else None
+        )
+
+        top_candidates.append(
+            {
+                "candidate": candidate,
+                "mismatches": {
+                    "amount": {
+                        "expected": settlement_amount,
+                        "actual": candidate_amount,
+                        "delta": _calculate_numeric_delta(
+                            settlement_amount,
+                            candidate_amount,
+                        ),
+                    },
+                    "date": {
+                        "expected": settlement_date,
+                        "actual": candidate_date,
+                        "delta_days": _calculate_date_delta(
+                            settlement_date,
+                            candidate_date,
+                        ),
+                    },
+                    "reference": {
+                        "expected": settlement_reference,
+                        "actual": candidate_reference,
+                        "match": (
+                            settlement_reference
+                            == candidate_reference
+                        ),
+                    },
+                },
+            }
+        )
+
+    return {
+        "transaction": transaction,
+        "decision": {
+            "status": decision.status,
+            "method": decision.method,
+            "confidence": decision.confidence,
+            "confidence_bucket": (
+                decision.confidence_bucket.value
+            ),
+            "reason": decision.reason,
+        },
+        "top_candidates": top_candidates,
+    }
 
 
 def _deterministic_decision(
@@ -552,6 +698,22 @@ def decide_chain(
                     chain,
                 )
             )
+
+            if decision.confidence_bucket == ConfidenceBucket.MEDIUM:
+                evidence = _build_ai_evidence_payload(
+                    chain,
+                    decision,
+                    bank_candidates,
+                )
+
+                decision.ai_reasoning = reason_about_reconciliation(
+                    evidence
+                )
+
+                decision.reason = (
+                    f"{decision.reason} "
+                    "Medium-confidence case routed to AI reasoning service."
+                )
 
             return _auto_resolve_if_eligible(
                 decision,
