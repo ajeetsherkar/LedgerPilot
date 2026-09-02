@@ -1,6 +1,8 @@
 from backend.app.reconciliation.confidence import ConfidenceBucket
 from backend.app.reconciliation.decision_engine import (
     MatchDecision,
+    _add_confidence_bucket,
+    _auto_resolve_if_eligible,
     decide_chain,
     select_best_candidate,
 )
@@ -328,6 +330,97 @@ def test_decision_contains_explanation():
 
     assert result.reason
     assert isinstance(result.reason, str)
+
+
+def test_high_confidence_verified_match_becomes_auto_resolved():
+    decision = MatchDecision(
+        status="MATCH",
+        method="EXACT",
+        confidence=1.0,
+    )
+
+    decision = _add_confidence_bucket(decision)
+
+    result = _auto_resolve_if_eligible(
+        decision,
+        verification_passed=True,
+        has_competing_candidate=False,
+    )
+
+    assert result.status == "AUTO_RESOLVED"
+    assert result.confidence_bucket == ConfidenceBucket.HIGH
+
+
+def test_high_confidence_match_without_verification_is_not_auto_resolved():
+    decision = MatchDecision(
+        status="MATCH",
+        method="EXACT",
+        confidence=1.0,
+    )
+
+    decision = _add_confidence_bucket(decision)
+
+    result = _auto_resolve_if_eligible(
+        decision,
+        verification_passed=False,
+        has_competing_candidate=False,
+    )
+
+    assert result.status == "MATCH"
+
+
+def test_high_confidence_verified_match_with_competitor_is_not_auto_resolved():
+    decision = MatchDecision(
+        status="MATCH",
+        method="SIMILARITY",
+        confidence=0.95,
+    )
+
+    decision = _add_confidence_bucket(decision)
+
+    result = _auto_resolve_if_eligible(
+        decision,
+        verification_passed=True,
+        has_competing_candidate=True,
+    )
+
+    assert result.status == "MATCH"
+
+
+def test_medium_confidence_verified_match_is_not_auto_resolved():
+    decision = MatchDecision(
+        status="MATCH",
+        method="SIMILARITY",
+        confidence=0.80,
+    )
+
+    decision = _add_confidence_bucket(decision)
+
+    result = _auto_resolve_if_eligible(
+        decision,
+        verification_passed=True,
+        has_competing_candidate=False,
+    )
+
+    assert result.status == "MATCH"
+
+
+def test_review_decision_is_not_auto_resolved():
+    decision = MatchDecision(
+        status="REVIEW",
+        method="SIMILARITY",
+        confidence=0.95,
+    )
+
+    decision = _add_confidence_bucket(decision)
+
+    result = _auto_resolve_if_eligible(
+        decision,
+        verification_passed=True,
+        has_competing_candidate=False,
+    )
+
+    assert result.status == "REVIEW"
 
 def test_similarity_fallback_matches_bank_candidate():
     chain = make_chain(

@@ -72,6 +72,40 @@ def _add_confidence_bucket(
     return decision
 
 
+def _auto_resolve_if_eligible(
+    decision: MatchDecision,
+    *,
+    verification_passed: bool,
+    has_competing_candidate: bool,
+) -> MatchDecision:
+    """
+    Convert an eligible MATCH into AUTO_RESOLVED.
+
+    Auto-resolution requires all three conditions:
+        1. HIGH confidence
+        2. Verification passed
+        3. No competing candidate
+
+    Verification is intentionally supplied as an explicit hook for
+    Session 8. Until verification is implemented, callers must not
+    pass True.
+    """
+
+    if (
+        decision.status == "MATCH"
+        and decision.confidence_bucket == ConfidenceBucket.HIGH
+        and verification_passed
+        and not has_competing_candidate
+    ):
+        decision.status = "AUTO_RESOLVED"
+        decision.reason = (
+            "High-confidence match passed verification and had "
+            "no competing candidate, so it was automatically resolved."
+        )
+
+    return decision
+
+
 def _with_chain_ids(
     decision: MatchDecision,
     chain: TransactionChain,
@@ -409,6 +443,7 @@ def decide_chain(
     chain: TransactionChain,
     *,
     bank_candidates: Optional[list[dict[str, Any]]] = None,
+    verification_passed: bool = False,
 ) -> MatchDecision:
     """
     Apply the deterministic reconciliation decision pipeline,
@@ -443,11 +478,17 @@ def decide_chain(
     deterministic_result = _deterministic_decision(chain)
 
     if deterministic_result is not None:
-        return _add_confidence_bucket(
+        decision = _add_confidence_bucket(
             _with_chain_ids(
                 deterministic_result,
                 chain,
             )
+        )
+
+        return _auto_resolve_if_eligible(
+            decision,
+            verification_passed=verification_passed,
+            has_competing_candidate=False,
         )
 
     # ---------------------------------------------------------
@@ -505,11 +546,17 @@ def decide_chain(
         )
 
         if similarity_result is not None:
-            return _add_confidence_bucket(
+            decision = _add_confidence_bucket(
                 _with_chain_ids(
                     similarity_result,
                     chain,
                 )
+            )
+
+            return _auto_resolve_if_eligible(
+                decision,
+                verification_passed=verification_passed,
+                has_competing_candidate=False,
             )
 
     return _add_confidence_bucket(
