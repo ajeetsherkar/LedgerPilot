@@ -265,6 +265,19 @@ def _similarity_decision(
     # ---------------------------------------------------------
 
     if status == "REVIEW":
+        if decision.get("ambiguous", False):
+            return MatchDecision(
+                status="REVIEW",
+                method="SIMILARITY",
+                confidence=0.0,
+                reason=(
+                    "Top two bank candidates have a score difference "
+                    "below the configured ambiguity margin. The system "
+                    "refuses to guess and requires human review."
+                ),
+                candidate=original_candidate,
+            )
+
         return MatchDecision(
             status="REVIEW",
             method="SIMILARITY",
@@ -366,17 +379,19 @@ def select_best_candidate(
         else 0.0
     )
 
-    score_margin = best_score - second_score
+    score_margin = round(best_score - second_score, 2)
 
-    if (
-        best_score >= match_threshold
-        and score_margin >= min_score_margin
-    ):
+    ambiguous = (
+        len(ranked) > 1
+        and score_margin < min_score_margin
+    )
+
+    if ambiguous:
+        status = "REVIEW"
+    elif best_score >= match_threshold:
         status = "MATCH"
-
     elif best_score >= review_threshold:
         status = "REVIEW"
-
     else:
         status = "UNRESOLVED"
 
@@ -385,6 +400,7 @@ def select_best_candidate(
         "candidate": best.get("candidate"),
         "score": best_score,
         "score_margin": score_margin,
+        "ambiguous": ambiguous,
         "ranked_candidates": ranked,
     }
 
