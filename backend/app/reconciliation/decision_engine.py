@@ -26,6 +26,7 @@ from backend.app.reconciliation.confidence import (
 
 from backend.app.reconciliation.ai_service import (
     reason_about_reconciliation,
+    safely_process_ai_response,
 )
 
 
@@ -706,13 +707,19 @@ def decide_chain(
                     bank_candidates,
                 )
 
-                decision.ai_reasoning = reason_about_reconciliation(
+                ai_response = reason_about_reconciliation(
                     evidence
+                )
+
+                decision.ai_reasoning = safely_process_ai_response(
+                    evidence,
+                    ai_response,
                 )
 
                 decision.reason = (
                     f"{decision.reason} "
-                    "Medium-confidence case routed to AI reasoning service."
+                    "Medium-confidence case routed to AI reasoning service "
+                    "through the safe AI validation boundary."
                 )
 
             return _auto_resolve_if_eligible(

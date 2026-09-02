@@ -637,3 +637,92 @@ def test_similarity_fallback_without_candidates_remains_unresolved():
     assert result.status == "UNRESOLVED"
     assert result.method == "NONE"
     assert result.confidence == 0.0
+
+def test_medium_confidence_ai_output_passes_through_safe_validation(
+    monkeypatch,
+):
+    chain = make_chain(
+        bank_reference="WRONG_REFERENCE",
+        bank_amount="950.00",
+        bank_date="2026-08-26",
+    )
+
+    bank_candidates = [
+        {
+            "transaction_id": "BANK999",
+            "reference": "SETTXN001",
+            "credit_amount": "950.00",
+            "transaction_date": "2026-08-26",
+        }
+    ]
+
+    def fake_ai_service(evidence):
+        return {
+            "classification": "LIKELY_MATCH",
+            "recommended_action": "HUMAN_REVIEW",
+            "reason": "Amount matches but reference differs.",
+            "confidence": 0.82,
+        }
+
+    monkeypatch.setattr(
+        "backend.app.reconciliation.decision_engine."
+        "reason_about_reconciliation",
+        fake_ai_service,
+    )
+
+    result = decide_chain(
+        chain,
+        bank_candidates=bank_candidates,
+    )
+
+    if result.confidence_bucket == ConfidenceBucket.MEDIUM:
+        assert result.ai_reasoning is not None
+        assert result.ai_reasoning["status"] == "AI_VALIDATED"
+        assert result.ai_reasoning["classification"] == "LIKELY_MATCH"
+        assert result.ai_reasoning["recommended_action"] == "HUMAN_REVIEW"
+        assert result.ai_reasoning["confidence"] == 0.82
+
+
+def test_medium_confidence_invalid_ai_output_falls_back_to_human_review(
+    monkeypatch,
+):
+    chain = make_chain(
+        bank_reference="WRONG_REFERENCE",
+        bank_amount="950.00",
+        bank_date="2026-08-26",
+    )
+
+    bank_candidates = [
+        {
+            "transaction_id": "BANK999",
+            "reference": "SETTXN001",
+            "credit_amount": "950.00",
+            "transaction_date": "2026-08-26",
+        }
+    ]
+
+    def fake_ai_service(evidence):
+        return {
+            "classification": "AUTO_RESOLVE",
+            "recommended_action": "AUTO_RESOLVE",
+            "reason": "This invalid AI response must not be trusted.",
+            "confidence": 9.99,
+        }
+
+    monkeypatch.setattr(
+        "backend.app.reconciliation.decision_engine."
+        "reason_about_reconciliation",
+        fake_ai_service,
+    )
+
+    result = decide_chain(
+        chain,
+        bank_candidates=bank_candidates,
+    )
+
+    if result.confidence_bucket == ConfidenceBucket.MEDIUM:
+        assert result.ai_reasoning is not None
+        assert result.ai_reasoning["status"] == "HUMAN_REVIEW"
+        assert "classification" not in result.ai_reasoning
+        assert "recommended_action" not in result.ai_reasoning
+        assert "confidence" not in result.ai_reasoning
