@@ -1,25 +1,37 @@
-from fastapi import FastAPI, File, UploadFile
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, File, HTTPException, UploadFile
+from pydantic import BaseModel
 
 from backend.app.database import initialize_database
-
 from backend.app.reconciliation.engine import load_datasets
-
 from backend.app.reconciliation.batch_loader import load_batch
 from backend.app.reconciliation.pipeline import reconcile_all
-
 from backend.app.reconciliation.ingestion import ingest_csv_files
+from backend.app.reconciliation.human_review import (
+    get_review,
+    list_reviews,
+    resolve_review,
+)
+
+
+class ReviewResolutionRequest(BaseModel):
+    reviewer: str
+    reason: str
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    initialize_database()
+    yield
 
 
 app = FastAPI(
     title="LedgerPilot",
     description="AI-assisted financial reconciliation and settlement controller",
     version="0.1.0",
+    lifespan=lifespan,
 )
-
-
-@app.on_event("startup")
-def startup():
-    initialize_database()
 
 
 @app.get("/health")
@@ -103,3 +115,100 @@ def reconciliation(batch_id: str):
             for result in results
         ],
     }
+
+
+@app.get("/reconciliation/{batch_id}/reviews")
+def get_reviews(batch_id: str):
+
+    reviews = list_reviews(batch_id)
+
+    return {
+        "batch_id": batch_id,
+        "total": len(reviews),
+        "reviews": reviews,
+    }
+
+
+@app.get("/reconciliation/{batch_id}/reviews/{review_id}")
+def get_review_by_id(
+    batch_id: str,
+    review_id: str,
+):
+
+    review = get_review(review_id)
+
+    if review is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Human review not found: {review_id}",
+        )
+
+    if review["batch_id"] != batch_id:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Human review not found: {review_id}",
+        )
+
+    return review
+
+
+@app.post(
+    "/reconciliation/{batch_id}/reviews/{review_id}/approve"
+)
+def approve_review(
+    batch_id: str,
+    review_id: str,
+    request: ReviewResolutionRequest,
+):
+
+    review = get_review(review_id)
+
+    if review is None or review["batch_id"] != batch_id:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Human review not found: {review_id}",
+        )
+
+    try:
+        return resolve_review(
+            review_id=review_id,
+            final_decision="APPROVE",
+            reviewer=request.reviewer,
+            reason=request.reason,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        )
+
+
+@app.post(
+    "/reconciliation/{batch_id}/reviews/{review_id}/reject"
+)
+def reject_review(
+    batch_id: str,
+    review_id: str,
+    request: ReviewResolutionRequest,
+):
+
+    review = get_review(review_id)
+
+    if review is None or review["batch_id"] != batch_id:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Human review not found: {review_id}",
+        )
+
+    try:
+        return resolve_review(
+            review_id=review_id,
+            final_decision="REJECT",
+            reviewer=request.reviewer,
+            reason=request.reason,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        )

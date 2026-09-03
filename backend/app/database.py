@@ -53,5 +53,55 @@ def initialize_database():
         """
     )
 
+    initialize_human_review_table(connection)
+
     connection.commit()
     connection.close()
+
+
+# ---------------------------------------------------------
+# HUMAN REVIEW
+# ---------------------------------------------------------
+
+def initialize_human_review_table(connection):
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS human_reviews (
+            review_id TEXT PRIMARY KEY,
+            batch_id TEXT NOT NULL,
+
+            order_id TEXT,
+            payment_id TEXT,
+            settlement_id TEXT,
+            bank_transaction_id TEXT,
+
+            original_decision TEXT NOT NULL,
+            final_decision TEXT,
+
+            reviewer TEXT,
+            reviewed_at TEXT,
+            reason TEXT,
+
+            created_at TEXT NOT NULL,
+
+            FOREIGN KEY (batch_id)
+                REFERENCES upload_batches(batch_id)
+        )
+        """
+    )
+
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_human_reviews_batch_id
+        ON human_reviews(batch_id)
+        """
+    )
+
+    connection.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_human_reviews_status
+        ON human_reviews(final_decision)
+        """
+    )
+
+
