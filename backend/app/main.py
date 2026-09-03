@@ -9,6 +9,7 @@ from backend.app.reconciliation.batch_loader import load_batch
 from backend.app.reconciliation.pipeline import reconcile_all
 from backend.app.reconciliation.ingestion import ingest_csv_files
 from backend.app.reconciliation.human_review import (
+    create_or_get_review,
     get_review,
     list_reviews,
     resolve_review,
@@ -64,6 +65,7 @@ def upload_csv_files(
 
 @app.get("/reconciliation/{batch_id}")
 def reconciliation(batch_id: str):
+
     (
         orders,
         payments,
@@ -78,6 +80,44 @@ def reconciliation(batch_id: str):
         banks,
         bank_candidates=banks,
     )
+
+    response_results = []
+
+    for result in results:
+
+        review_id = None
+
+        if result.status == "REVIEW":
+            review = create_or_get_review(
+                batch_id=batch_id,
+                order_id=result.order_id,
+                payment_id=result.payment_id,
+                settlement_id=result.settlement_id,
+                bank_transaction_id=result.bank_transaction_id,
+                original_decision=result.status,
+                reason=result.reason,
+            )
+
+            review_id = review["review_id"]
+
+        response_result = {
+            "order_id": result.order_id,
+            "payment_id": result.payment_id,
+            "settlement_id": result.settlement_id,
+            "bank_transaction_id": result.bank_transaction_id,
+            "status": result.status,
+            "method": result.method,
+            "confidence": result.confidence,
+            "confidence_bucket": result.confidence_bucket,
+            "reason": result.reason,
+            "candidate": result.candidate,
+            "ai_reasoning": result.ai_reasoning,
+        }
+
+        if review_id is not None:
+            response_result["review_id"] = review_id
+
+        response_results.append(response_result)
 
     return {
         "batch_id": batch_id,
@@ -98,22 +138,7 @@ def reconciliation(batch_id: str):
             result.status == "EXCEPTION"
             for result in results
         ),
-        "results": [
-            {
-                "order_id": result.order_id,
-                "payment_id": result.payment_id,
-                "settlement_id": result.settlement_id,
-                "bank_transaction_id": result.bank_transaction_id,
-                "status": result.status,
-                "method": result.method,
-                "confidence": result.confidence,
-                "confidence_bucket": result.confidence_bucket,
-                "reason": result.reason,
-                "candidate": result.candidate,
-                "ai_reasoning": result.ai_reasoning,
-            }
-            for result in results
-        ],
+        "results": response_results,
     }
 
 

@@ -340,6 +340,69 @@ def test_human_review_requires_reviewer_and_reason():
     _cleanup_human_review("TEST-VALIDATION")
 
 
+def test_reconciliation_review_creates_human_review_record():
+
+    from backend.app.reconciliation.decision_engine import (
+        MatchDecision,
+    )
+    from backend.app.reconciliation.human_review import (
+        get_review,
+    )
+
+    batch_id = "TEST-AUTO-REVIEW"
+
+    review_decision = MatchDecision(
+        status="REVIEW",
+        method="SIMILARITY",
+        confidence=0.70,
+        reason="Requires human verification.",
+        order_id="ORD-AUTO",
+        payment_id="PAY-AUTO",
+        settlement_id="SET-AUTO",
+        bank_transaction_id="BTX-AUTO",
+    )
+
+    review = create_or_get_review(
+        batch_id=batch_id,
+        order_id=review_decision.order_id,
+        payment_id=review_decision.payment_id,
+        settlement_id=review_decision.settlement_id,
+        bank_transaction_id=review_decision.bank_transaction_id,
+        original_decision=review_decision.status,
+        reason=review_decision.reason,
+    )
+
+    review_id = review["review_id"]
+
+    assert review_id.startswith("REV-")
+
+    persisted = get_review(review_id)
+
+    assert persisted is not None
+    assert persisted["review_id"] == review_id
+    assert persisted["batch_id"] == batch_id
+    assert persisted["order_id"] == "ORD-AUTO"
+    assert persisted["payment_id"] == "PAY-AUTO"
+    assert persisted["settlement_id"] == "SET-AUTO"
+    assert persisted["bank_transaction_id"] == "BTX-AUTO"
+    assert persisted["original_decision"] == "REVIEW"
+    assert persisted["final_decision"] is None
+    assert persisted["reviewer"] is None
+    assert persisted["reviewed_at"] is None
+    assert persisted["reason"] == "Requires human verification."
+
+    connection = get_connection()
+
+    try:
+        connection.execute(
+            "DELETE FROM human_reviews WHERE batch_id = ?",
+            (batch_id,),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+
 def _cleanup_human_review(batch_id: str):
 
     connection = get_connection()
