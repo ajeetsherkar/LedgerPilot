@@ -29,11 +29,17 @@ from backend.app.reconciliation.ai_service import (
     safely_process_ai_response,
 )
 
+from backend.app.reconciliation.verification import (
+    verify_match,
+)
+
 from backend.app.reconciliation.exception_classifier import (
     classify_chain_exception,
 )
 
 from backend.app.reconciliation.exception_types import ExceptionType
+
+from backend.app.reconciliation.decision_status import DecisionStatus
 
 
 # ---------------------------------------------------------
@@ -119,6 +125,75 @@ def _auto_resolve_if_eligible(
     return decision
 
 
+def _finalize_decision(
+    decision: MatchDecision,
+) -> MatchDecision:
+    """
+    Finalize a reconciliation decision.
+
+    Preserve deterministic/internal decision states such as:
+        MATCH
+        REVIEW
+        UNRESOLVED
+        EXCEPTION
+
+    Convert only eligible AI responses into AI_SUGGESTED.
+
+    AUTO_RESOLVED is preserved when deterministic verification
+    has already approved the match.
+    """
+
+    # ---------------------------------------------------------
+    # 1. ALREADY AUTO-RESOLVED
+    # ---------------------------------------------------------
+    if decision.status == DecisionStatus.AUTO_RESOLVED.value:
+        return decision
+
+    # ---------------------------------------------------------
+    # 2. VALIDATED AI SUGGESTION
+    # ---------------------------------------------------------
+    if (
+        decision.ai_reasoning is not None
+        and decision.ai_reasoning.get("status") == "AI_VALIDATED"
+        and decision.ai_reasoning.get("recommended_action")
+    ):
+        decision.status = DecisionStatus.AI_SUGGESTED.value
+
+        decision.reason = (
+            f"{decision.reason} "
+            "AI produced a validated reconciliation suggestion "
+            "for human review."
+        )
+
+        return decision
+
+    # ---------------------------------------------------------
+    # 3. PRESERVE EXISTING DECISION STATE
+    # ---------------------------------------------------------
+    #
+    # MATCH
+    # REVIEW
+    # UNRESOLVED
+    # EXCEPTION
+    #
+    # These states are meaningful and must not all be collapsed
+    # into HUMAN_REVIEW.
+    #
+    return decision
+
+
+def _finalize_with_confidence(
+    decision: MatchDecision,
+) -> MatchDecision:
+    """
+    Apply centralized confidence classification and then
+    convert the internal decision into a Session 10 terminal
+    business outcome.
+    """
+    decision = _add_confidence_bucket(decision)
+    return _finalize_decision(decision)
+
+
 def _with_chain_ids(
     decision: MatchDecision,
     chain: TransactionChain,
@@ -129,6 +204,53 @@ def _with_chain_ids(
     decision.bank_transaction_id = chain.bank_transaction_id
 
     return decision
+
+
+def _verify_decision(
+    chain: TransactionChain,
+    decision: MatchDecision,
+    bank_candidates: Optional[list[dict[str, Any]]],
+) -> bool:
+    """
+    Deterministically verify a proposed settlement -> bank match.
+
+    Verification is required before AUTO_RESOLVED can be produced.
+    AI is never trusted as proof of reconciliation.
+    """
+
+    if decision.candidate is None:
+        return False
+
+    if chain.settlement is None:
+        return False
+
+    if bank_candidates is None:
+        candidates = [decision.candidate]
+    else:
+        candidates = bank_candidates
+
+    verification = verify_match(
+        chain.settlement,
+        decision.candidate,
+        candidates,
+    )
+
+    if not verification.passed:
+        # Preserve verification evidence for downstream
+        # routing and human review.
+        if decision.reason:
+            decision.reason = (
+                f"{decision.reason} "
+                f"Deterministic verification failed: "
+                f"{' '.join(verification.reasons)}"
+            )
+        else:
+            decision.reason = (
+                "Deterministic verification failed: "
+                f"{' '.join(verification.reasons)}"
+            )
+
+    return verification.passed
 
 
 def _calculate_numeric_delta(
@@ -301,6 +423,7 @@ def _deterministic_decision(
                 "Transaction chain satisfies the exact "
                 "matching rules."
             ),
+            candidate=chain.bank,
         )
 
     if fee_aware_match(chain):
@@ -312,6 +435,7 @@ def _deterministic_decision(
                 "Transaction chain reconciles after applying "
                 "the configured fee and GST calculation."
             ),
+            candidate=chain.bank,
         )
 
     if date_window_match(chain):
@@ -323,6 +447,7 @@ def _deterministic_decision(
                 "Transaction chain satisfies the configured "
                 "date-window reconciliation rules."
             ),
+            candidate=chain.bank,
         )
 
     return None
@@ -653,7 +778,7 @@ def decide_chain(
         chain.payment is None
         or chain.settlement is None
     ):
-        return _add_confidence_bucket(
+        return _finalize_with_confidence(
             _with_chain_ids(
                 MatchDecision(
                     status="UNRESOLVED",
@@ -682,7 +807,7 @@ def decide_chain(
         and not bank_candidates
         and allow_missing_bank_exception
     ):
-        return _add_confidence_bucket(
+        return _finalize_with_confidence(
             _with_chain_ids(
                 MatchDecision(
                     status="EXCEPTION",
@@ -736,7 +861,7 @@ def decide_chain(
             ),
         }
 
-        return _add_confidence_bucket(
+        return _finalize_with_confidence(
             _with_chain_ids(
                 MatchDecision(
                     status="EXCEPTION",
@@ -769,7 +894,7 @@ def decide_chain(
             payment_mismatch = False
 
         if payment_mismatch:
-            return _add_confidence_bucket(
+            return _finalize_with_confidence(
                 _with_chain_ids(
                     MatchDecision(
                         status="EXCEPTION",
@@ -799,11 +924,19 @@ def decide_chain(
             )
         )
 
-        return _auto_resolve_if_eligible(
+        verification_passed = _verify_decision(
+            chain,
+            decision,
+            bank_candidates,
+        )
+
+        decision = _auto_resolve_if_eligible(
             decision,
             verification_passed=verification_passed,
             has_competing_candidate=False,
         )
+
+        return _finalize_decision(decision)
 
     # ---------------------------------------------------------
     # SIMILARITY FALLBACK
@@ -821,6 +954,12 @@ def decide_chain(
                     similarity_result,
                     chain,
                 )
+            )
+
+            verification_passed = _verify_decision(
+                chain,
+                decision,
+                bank_candidates,
             )
 
             if decision.confidence_bucket == ConfidenceBucket.MEDIUM:
@@ -851,11 +990,13 @@ def decide_chain(
                     "through the safe AI validation boundary."
                 )
 
-            return _auto_resolve_if_eligible(
+            decision = _auto_resolve_if_eligible(
                 decision,
                 verification_passed=verification_passed,
                 has_competing_candidate=False,
             )
+
+            return _finalize_decision(decision)
 
     # ---------------------------------------------------------
     # CANONICAL ACCOUNTING EXCEPTION
@@ -879,7 +1020,7 @@ def decide_chain(
         chain_exception == ExceptionType.MISSING_BANK_RECORD
         and bank_candidates is None
     ):
-        return _add_confidence_bucket(
+        return _finalize_with_confidence(
             _with_chain_ids(
                 MatchDecision(
                     status="EXCEPTION",
@@ -920,7 +1061,7 @@ def decide_chain(
             bank_amount_mismatch = False
 
         if bank_amount_mismatch:
-            return _add_confidence_bucket(
+            return _finalize_with_confidence(
                 _with_chain_ids(
                     MatchDecision(
                         status="EXCEPTION",
@@ -941,7 +1082,7 @@ def decide_chain(
     # FINAL UNRESOLVED
     # ---------------------------------------------------------
 
-    return _add_confidence_bucket(
+    return _finalize_with_confidence(
         _with_chain_ids(
             MatchDecision(
                 status="UNRESOLVED",

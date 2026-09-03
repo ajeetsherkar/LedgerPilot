@@ -17,6 +17,7 @@ def make_chain(
     order_amount="1000.00",
     payment_amount="1000.00",
     settlement_net="1000.00",
+    currency="INR",
     bank_amount="1000.00",
     settlement_reference="SETTXN001",
     bank_reference="SETTXN001",
@@ -47,6 +48,7 @@ def make_chain(
         "gst_on_fee": "0.00",
         "net_amount": settlement_net,
         "settlement_date": settlement_date,
+        "currency": "INR",
     }
 
     bank = {
@@ -54,6 +56,7 @@ def make_chain(
         "reference": bank_reference,
         "credit_amount": bank_amount,
         "transaction_date": bank_date,
+        "currency": "INR",
     }
 
     return TransactionChain(
@@ -69,7 +72,7 @@ def test_exact_match_has_high_confidence_bucket():
 
     result = decide_chain(chain)
 
-    assert result.status == "MATCH"
+    assert result.status == "AUTO_RESOLVED"
     assert result.method == "EXACT"
     assert result.confidence == 1.0
     assert result.confidence_bucket == ConfidenceBucket.HIGH
@@ -892,3 +895,173 @@ def test_unresolved_similarity_has_exception_type():
         exception_type.value
         for exception_type in ExceptionType
     }
+
+
+def test_finalize_auto_resolved_stays_auto_resolved():
+    from backend.app.reconciliation.decision_engine import (
+        _finalize_decision,
+        MatchDecision,
+    )
+
+    decision = MatchDecision(
+        status="AUTO_RESOLVED",
+        method="EXACT",
+        confidence=0.99,
+        reason="Verified exact match.",
+    )
+
+    result = _finalize_decision(decision)
+
+    assert result.status == "AUTO_RESOLVED"
+
+
+def test_finalize_validated_ai_becomes_ai_suggested():
+    from backend.app.reconciliation.decision_engine import (
+        _finalize_decision,
+        MatchDecision,
+    )
+
+    decision = MatchDecision(
+        status="MATCH",
+        method="SIMILARITY",
+        confidence=0.80,
+        reason="Similarity match.",
+        ai_reasoning={
+            "status": "AI_VALIDATED",
+            "classification": "MATCH",
+            "recommended_action": "APPROVE",
+            "reason": "Evidence supports the proposed match.",
+            "confidence": 0.91,
+        },
+    )
+
+    result = _finalize_decision(decision)
+
+    assert result.status == "AI_SUGGESTED"
+
+
+def test_finalize_unresolved_becomes_human_review():
+    from backend.app.reconciliation.decision_engine import (
+        _finalize_decision,
+        MatchDecision,
+    )
+
+    decision = MatchDecision(
+        status="UNRESOLVED",
+        method="NONE",
+        confidence=0.20,
+        reason="No reliable candidate found.",
+    )
+
+    result = _finalize_decision(decision)
+
+    assert result.status == "UNRESOLVED"
+
+
+def test_finalize_exception_becomes_human_review():
+    from backend.app.reconciliation.decision_engine import (
+        _finalize_decision,
+        MatchDecision,
+    )
+
+    decision = MatchDecision(
+        status="EXCEPTION",
+        method="NONE",
+        confidence=1.0,
+        reason="Settlement amount mismatch.",
+        exception_type="AMOUNT_MISMATCH",
+    )
+
+    result = _finalize_decision(decision)
+
+    assert result.status == "EXCEPTION"
+
+
+def test_high_confidence_deterministic_match_requires_verification():
+    from backend.app.reconciliation.decision_engine import (
+        MatchDecision,
+        _verify_decision,
+    )
+
+    settlement = {
+        "settlement_id": "SET001",
+        "gross_amount": 1000,
+        "platform_fee": 10,
+        "gst_on_fee": 1.80,
+        "net_amount": 988.20,
+        "settlement_date": "2026-08-26",
+        "settlement_reference": "SETTXN001",
+        "currency": "INR",
+    }
+
+    candidate = {
+        "transaction_id": "BTX001",
+        "transaction_date": "2026-08-26",
+        "credit_amount": 988.20,
+        "currency": "INR",
+        "reference": "SETTXN001",
+    }
+
+    decision = MatchDecision(
+        status="MATCH",
+        method="EXACT",
+        confidence=0.99,
+        candidate=candidate,
+    )
+
+    class FakeChain:
+        pass
+
+    chain = FakeChain()
+    chain.settlement = settlement
+
+    assert _verify_decision(
+        chain,
+        decision,
+        None,
+    ) is True
+
+
+def test_verification_failure_prevents_auto_resolution():
+    from backend.app.reconciliation.decision_engine import (
+        MatchDecision,
+        _verify_decision,
+    )
+
+    settlement = {
+        "settlement_id": "SET001",
+        "gross_amount": 1000,
+        "platform_fee": 10,
+        "gst_on_fee": 1.80,
+        "net_amount": 988.20,
+        "settlement_date": "2026-08-26",
+        "settlement_reference": "SETTXN001",
+        "currency": "INR",
+    }
+
+    candidate = {
+        "transaction_id": "BTX001",
+        "transaction_date": "2026-08-25",
+        "credit_amount": 900.00,
+        "currency": "INR",
+        "reference": "WRONG_REFERENCE",
+    }
+
+    decision = MatchDecision(
+        status="MATCH",
+        method="EXACT",
+        confidence=0.99,
+        candidate=candidate,
+    )
+
+    class FakeChain:
+        pass
+
+    chain = FakeChain()
+    chain.settlement = settlement
+
+    assert _verify_decision(
+        chain,
+        decision,
+        None,
+    ) is False
