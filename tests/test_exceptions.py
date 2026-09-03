@@ -1,7 +1,5 @@
 from datetime import timedelta
 
-from backend.app.reconciliation.exceptions import classify_exception
-from backend.app.reconciliation.models import ReconciliationResult
 
 
 def make_result(
@@ -28,37 +26,6 @@ def make_result(
     )
 
 
-def test_matched_result():
-    result = make_result()
-
-    assert classify_exception(result) == "MATCHED"
-
-
-def test_payment_mismatch():
-    result = make_result(
-        payment_status="MISMATCH",
-        reconciliation_status="EXCEPTION",
-    )
-
-    assert classify_exception(result) == "PAYMENT_MISMATCH"
-
-
-def test_settlement_mismatch():
-    result = make_result(
-        settlement_status="MISMATCH",
-        reconciliation_status="EXCEPTION",
-    )
-
-    assert classify_exception(result) == "SETTLEMENT_MISMATCH"
-
-
-def test_bank_mismatch():
-    result = make_result(
-        bank_status="MISMATCH",
-        reconciliation_status="EXCEPTION",
-    )
-
-    assert classify_exception(result) == "BANK_MISMATCH"
 
 
 def test_date_drift_changes_settlement_and_bank_dates_only():

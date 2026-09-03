@@ -6,6 +6,7 @@ from backend.app.reconciliation.decision_engine import (
     decide_chain,
     select_best_candidate,
 )
+from backend.app.reconciliation.exception_types import ExceptionType
 from backend.app.reconciliation.relationship_builder import (
     TransactionChain,
 )
@@ -91,6 +92,7 @@ def test_payment_mismatch_remains_exception_with_high_confidence():
     result = decide_chain(chain)
 
     assert result.status == "EXCEPTION"
+    assert result.exception_type == ExceptionType.AMOUNT_MISMATCH.value
     assert result.confidence == 1.0
     assert result.confidence_bucket == ConfidenceBucket.HIGH
 
@@ -726,3 +728,167 @@ def test_medium_confidence_invalid_ai_output_falls_back_to_human_review(
         assert "classification" not in result.ai_reasoning
         assert "recommended_action" not in result.ai_reasoning
         assert "confidence" not in result.ai_reasoning
+
+
+def test_decide_chain_missing_payment_is_unresolved():
+    chain = TransactionChain(
+        order={
+            "order_id": "ORD001",
+            "order_amount": 1000,
+        },
+        payment=None,
+        settlement=None,
+        bank=None,
+    )
+
+    decision = decide_chain(chain)
+
+    assert decision.status == "UNRESOLVED"
+    assert decision.exception_type == ExceptionType.UNKNOWN_REFERENCE.value
+
+
+def test_decide_chain_missing_settlement_is_unresolved():
+    chain = TransactionChain(
+        order={
+            "order_id": "ORD001",
+            "order_amount": 1000,
+        },
+        payment={
+            "payment_id": "PAY001",
+            "amount": 1000,
+        },
+        settlement=None,
+        bank=None,
+    )
+
+    decision = decide_chain(chain)
+
+    assert decision.status == "UNRESOLVED"
+    assert decision.exception_type == ExceptionType.UNKNOWN_REFERENCE.value
+
+
+def test_decide_chain_classifies_missing_bank():
+    chain = TransactionChain(
+        order={
+            "order_id": "ORD001",
+            "order_amount": 1000,
+        },
+        payment={
+            "payment_id": "PAY001",
+            "amount": 1000,
+        },
+        settlement={
+            "settlement_id": "SET001",
+            "gross_amount": 1000,
+            "net_amount": 988.20,
+        },
+        bank=None,
+    )
+
+    decision = decide_chain(chain)
+
+    assert decision.status == "EXCEPTION"
+    assert decision.exception_type == ExceptionType.MISSING_BANK_RECORD.value
+
+
+def test_decide_chain_classifies_bank_mismatch():
+    chain = TransactionChain(
+        order={
+            "order_id": "ORD001",
+            "order_amount": 1000,
+            "order_date": "2026-08-28",
+        },
+        payment={
+            "payment_id": "PAY001",
+            "order_id": "ORD001",
+            "amount": 1000,
+            "payment_date": "2026-08-28",
+        },
+        settlement={
+            "settlement_id": "SET001",
+            "payment_id": "PAY001",
+            "settlement_reference": "SET-REF-001",
+            "gross_amount": 1000,
+            "net_amount": 988.20,
+            "settlement_date": "2026-08-29",
+        },
+        bank={
+            "transaction_id": "BANK001",
+            "reference": "SET-REF-001",
+            "credit_amount": 900,
+            "transaction_date": "2026-08-30",
+        },
+    )
+
+    decision = decide_chain(chain)
+
+    assert decision.status == "EXCEPTION"
+    assert decision.exception_type == ExceptionType.AMOUNT_MISMATCH.value
+
+
+def test_payment_mismatch_uses_canonical_amount_mismatch_exception():
+    chain = TransactionChain(
+        order={
+            "order_id": "ORD001",
+            "order_amount": 1000,
+        },
+        payment={
+            "payment_id": "PAY001",
+            "amount": 900,
+        },
+        settlement={
+            "settlement_id": "SET001",
+            "gross_amount": 1000,
+            "net_amount": 988.20,
+        },
+        bank={
+            "transaction_id": "BANK001",
+            "credit_amount": 988.20,
+        },
+    )
+
+    decision = decide_chain(chain)
+
+    assert decision.status == "EXCEPTION"
+    assert decision.exception_type == ExceptionType.AMOUNT_MISMATCH.value
+
+
+def test_exception_taxonomy_contains_exactly_eight_categories():
+    expected = {
+        "MISSING_BANK_RECORD",
+        "MISSING_PAYMENT",
+        "MISSING_SETTLEMENT",
+        "AMOUNT_MISMATCH",
+        "DUPLICATE_BANK_TRANSACTION",
+        "UNKNOWN_REFERENCE",
+        "AMBIGUOUS_MATCH",
+        "PARTIAL_SETTLEMENT",
+        "COMBINED_SETTLEMENT",
+        "DATE_MISMATCH",
+    }
+
+    actual = {
+        exception_type.value
+        for exception_type in ExceptionType
+    }
+
+    assert actual == expected
+
+
+def test_unresolved_similarity_has_exception_type():
+    chain = make_chain(
+        bank_reference="WRONG_REFERENCE",
+        bank_amount="900.00",
+        bank_date="2026-08-30",
+    )
+
+    result = decide_chain(
+        chain,
+        bank_candidates=[],
+    )
+
+    assert result.status == "UNRESOLVED"
+    assert result.exception_type in {
+        exception_type.value
+        for exception_type in ExceptionType
+    }

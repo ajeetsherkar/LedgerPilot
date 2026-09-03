@@ -52,6 +52,17 @@ def reconcile_all(
             bank_candidates=bank_candidates,
         )
 
+        if (
+            decision.exception_type == "MISSING_BANK_RECORD"
+            and not bank_candidates
+        ):
+            decision.status = "UNRESOLVED"
+            decision.confidence = 0.0
+            decision.reason = (
+                "Transaction chain is missing the required bank record "
+                "and no bank candidates were supplied."
+            )
+
         decisions.append(decision)
 
     return decisions

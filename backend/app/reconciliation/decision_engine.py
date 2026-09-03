@@ -29,6 +29,12 @@ from backend.app.reconciliation.ai_service import (
     safely_process_ai_response,
 )
 
+from backend.app.reconciliation.exception_classifier import (
+    classify_chain_exception,
+)
+
+from backend.app.reconciliation.exception_types import ExceptionType
+
 
 # ---------------------------------------------------------
 # SESSION 9 CONFIGURATION
@@ -62,6 +68,7 @@ class MatchDecision:
     reason: str = ""
     candidate: Optional[dict[str, Any]] = None
     ai_reasoning: Optional[dict[str, Any]] = None
+    exception_type: Optional[str] = None
     order_id: Optional[str] = None
     payment_id: Optional[str] = None
     settlement_id: Optional[str] = None
@@ -457,6 +464,7 @@ def _similarity_decision(
                     "refuses to guess and requires human review."
                 ),
                 candidate=original_candidate,
+                exception_type=ExceptionType.AMBIGUOUS_MATCH.value,
             )
 
         return MatchDecision(
@@ -484,6 +492,7 @@ def _similarity_decision(
             "no candidate reached the review threshold."
         ),
         candidate=None,
+        exception_type=ExceptionType.UNKNOWN_REFERENCE.value,
     )
 
 
@@ -591,6 +600,7 @@ def decide_chain(
     *,
     bank_candidates: Optional[list[dict[str, Any]]] = None,
     verification_passed: bool = False,
+    allow_missing_bank_exception: bool = True,
 ) -> MatchDecision:
     """
     Apply the deterministic reconciliation decision pipeline,
@@ -601,6 +611,17 @@ def decide_chain(
 
         TransactionChain
               ↓
+        Incomplete Chain Check
+              ↓
+        Missing Bank Record Check
+              ↓
+        classify_chain_exception()
+              ↓
+        Canonical Session 7 Exceptions
+        (PARTIAL_SETTLEMENT / COMBINED_SETTLEMENT / DATE_MISMATCH)
+              ↓
+        Order/Payment Amount Mismatch Check
+              ↓
         Exact Matcher
               ↓
         Fee-Aware Matcher
@@ -608,6 +629,8 @@ def decide_chain(
         Date-Window Matcher
               ↓
         Similarity Fallback (if bank_candidates provided)
+              ↓
+        Other Canonical Accounting Exceptions
               ↓
         UNRESOLVED
 
@@ -621,6 +644,150 @@ def decide_chain(
         raise TypeError(
             "chain must be a TransactionChain"
         )
+
+    # ---------------------------------------------------------
+    # INCOMPLETE CHAIN → UNRESOLVED
+    # ---------------------------------------------------------
+
+    if (
+        chain.payment is None
+        or chain.settlement is None
+    ):
+        return _add_confidence_bucket(
+            _with_chain_ids(
+                MatchDecision(
+                    status="UNRESOLVED",
+                    method="NONE",
+                    confidence=0.0,
+                    reason=(
+                        "Transaction chain is incomplete and does "
+                        "not contain enough records to perform "
+                        "reconciliation."
+                    ),
+                    candidate=None,
+                    exception_type=(
+                        ExceptionType.UNKNOWN_REFERENCE.value
+                    ),
+                ),
+                chain,
+            )
+        )
+
+    # ---------------------------------------------------------
+    # MISSING BANK RECORD → EXCEPTION
+    # ---------------------------------------------------------
+
+    if (
+        chain.bank is None
+        and not bank_candidates
+        and allow_missing_bank_exception
+    ):
+        return _add_confidence_bucket(
+            _with_chain_ids(
+                MatchDecision(
+                    status="EXCEPTION",
+                    method="NONE",
+                    confidence=1.0,
+                    reason=(
+                        "Transaction chain is missing the required "
+                        "bank record."
+                    ),
+                    candidate=None,
+                    exception_type=(
+                        ExceptionType.MISSING_BANK_RECORD.value
+                    ),
+                ),
+                chain,
+            )
+        )
+
+    # ---------------------------------------------------------
+    # HARD ACCOUNTING EXCEPTION: ORDER/PAYMENT AMOUNT MISMATCH
+    # ---------------------------------------------------------
+    #
+    # This must be checked BEFORE deterministic matching.
+    # An order/payment amount mismatch is a hard accounting
+    # exception and must never be allowed to become MATCH.
+    #
+
+    chain_exception = classify_chain_exception(chain)
+
+    # ---------------------------------------------------------
+    # CANONICAL SESSION 7 EXCEPTIONS
+    # ---------------------------------------------------------
+
+    if chain_exception in {
+        ExceptionType.PARTIAL_SETTLEMENT,
+        ExceptionType.COMBINED_SETTLEMENT,
+        ExceptionType.DATE_MISMATCH,
+    }:
+        reasons = {
+            ExceptionType.PARTIAL_SETTLEMENT: (
+                "One payment is associated with multiple "
+                "settlement records."
+            ),
+            ExceptionType.COMBINED_SETTLEMENT: (
+                "Multiple payments are represented by a "
+                "single combined bank credit."
+            ),
+            ExceptionType.DATE_MISMATCH: (
+                "Transaction dates violate the configured "
+                "reconciliation date windows."
+            ),
+        }
+
+        return _add_confidence_bucket(
+            _with_chain_ids(
+                MatchDecision(
+                    status="EXCEPTION",
+                    method="NONE",
+                    confidence=1.0,
+                    reason=reasons[chain_exception],
+                    candidate=None,
+                    exception_type=chain_exception.value,
+                ),
+                chain,
+            )
+        )
+
+    if (
+        chain_exception == ExceptionType.AMOUNT_MISMATCH
+        and chain.order is not None
+        and chain.payment is not None
+    ):
+        order_amount = chain.order.get("order_amount")
+        payment_amount = chain.payment.get("amount")
+
+        try:
+            payment_mismatch = (
+                order_amount is not None
+                and payment_amount is not None
+                and round(float(order_amount), 2)
+                != round(float(payment_amount), 2)
+            )
+        except (TypeError, ValueError):
+            payment_mismatch = False
+
+        if payment_mismatch:
+            return _add_confidence_bucket(
+                _with_chain_ids(
+                    MatchDecision(
+                        status="EXCEPTION",
+                        method="NONE",
+                        confidence=1.0,
+                        reason=(
+                            "Order amount does not match payment amount."
+                        ),
+                        candidate=None,
+                        exception_type=chain_exception.value,
+                    ),
+                    chain,
+                )
+            )
+
+    # ---------------------------------------------------------
+    # DETERMINISTIC MATCHING
+    # ---------------------------------------------------------
 
     deterministic_result = _deterministic_decision(chain)
 
@@ -637,50 +804,6 @@ def decide_chain(
             verification_passed=verification_passed,
             has_competing_candidate=False,
         )
-
-    # ---------------------------------------------------------
-    # BLOCK SIMILARITY FALLBACK FOR KNOWN PAYMENT MISMATCH
-    # ---------------------------------------------------------
-
-    if (
-        chain.payment is not None
-        and chain.order is not None
-    ):
-        try:
-            order_amount = float(chain.order["order_amount"])
-            payment_amount = float(chain.payment["amount"])
-
-            if order_amount != payment_amount:
-                return _add_confidence_bucket(
-                    _with_chain_ids(
-                        MatchDecision(
-                            status="EXCEPTION",
-                            method="NONE",
-                            confidence=1.0,
-                            reason=(
-                                "Order amount does not match payment amount."
-                            ),
-                            candidate=None,
-                        ),
-                        chain,
-                    )
-                )
-        except (KeyError, TypeError, ValueError):
-            return _add_confidence_bucket(
-                _with_chain_ids(
-                    MatchDecision(
-                        status="EXCEPTION",
-                        method="NONE",
-                        confidence=1.0,
-                        reason=(
-                            "Order or payment amount could not be "
-                            "validated."
-                        ),
-                        candidate=None,
-                    ),
-                    chain,
-                )
-            )
 
     # ---------------------------------------------------------
     # SIMILARITY FALLBACK
@@ -701,6 +824,12 @@ def decide_chain(
             )
 
             if decision.confidence_bucket == ConfidenceBucket.MEDIUM:
+
+                if decision.exception_type is None:
+                    decision.exception_type = (
+                        ExceptionType.UNKNOWN_REFERENCE.value
+                    )
+
                 evidence = _build_ai_evidence_payload(
                     chain,
                     decision,
@@ -728,6 +857,90 @@ def decide_chain(
                 has_competing_candidate=False,
             )
 
+    # ---------------------------------------------------------
+    # CANONICAL ACCOUNTING EXCEPTION
+    # ---------------------------------------------------------
+    #
+    # Only surface exceptions that are independently established
+    # by the transaction chain. A failed reconciliation alone is
+    # not sufficient to declare an accounting exception.
+    #
+    # Missing bank is a structural exception and must be surfaced.
+    # Payment/order amount mismatch is also a hard exception and
+    # was already checked earlier, before deterministic matching.
+    #
+    # Settlement/bank amount mismatches are canonical accounting
+    # exceptions once all reconciliation strategies have failed.
+    #
+    # Reference problems without a deterministic match remain
+    # UNRESOLVED.
+
+    if (
+        chain_exception == ExceptionType.MISSING_BANK_RECORD
+        and bank_candidates is None
+    ):
+        return _add_confidence_bucket(
+            _with_chain_ids(
+                MatchDecision(
+                    status="EXCEPTION",
+                    method="NONE",
+                    confidence=1.0,
+                    reason=(
+                        "Transaction chain is missing the required "
+                        "bank record."
+                    ),
+                    candidate=None,
+                    exception_type=chain_exception.value,
+                ),
+                chain,
+            )
+        )
+
+    # ---------------------------------------------------------
+    # SETTLEMENT / BANK AMOUNT MISMATCH
+    # ---------------------------------------------------------
+    #
+    # At this point all deterministic and similarity matching
+    # strategies have already failed. Therefore an independently
+    # classified settlement/bank amount mismatch can safely be
+    # surfaced as a canonical accounting exception.
+    #
+    if chain_exception == ExceptionType.AMOUNT_MISMATCH:
+        settlement_net_amount = chain.settlement.get("net_amount")
+        bank_credit_amount = chain.bank.get("credit_amount")
+
+        try:
+            bank_amount_mismatch = (
+                settlement_net_amount is not None
+                and bank_credit_amount is not None
+                and round(float(settlement_net_amount), 2)
+                != round(float(bank_credit_amount), 2)
+            )
+        except (TypeError, ValueError):
+            bank_amount_mismatch = False
+
+        if bank_amount_mismatch:
+            return _add_confidence_bucket(
+                _with_chain_ids(
+                    MatchDecision(
+                        status="EXCEPTION",
+                        method="NONE",
+                        confidence=1.0,
+                        reason=(
+                            "Settlement net amount does not match "
+                            "the bank credit amount."
+                        ),
+                        candidate=None,
+                        exception_type=chain_exception.value,
+                    ),
+                    chain,
+                )
+            )
+
+    # ---------------------------------------------------------
+    # FINAL UNRESOLVED
+    # ---------------------------------------------------------
+
     return _add_confidence_bucket(
         _with_chain_ids(
             MatchDecision(
@@ -740,6 +953,7 @@ def decide_chain(
                     "produced a reviewable result."
                 ),
                 candidate=None,
+                exception_type=ExceptionType.UNKNOWN_REFERENCE.value,
             ),
             chain,
         )
