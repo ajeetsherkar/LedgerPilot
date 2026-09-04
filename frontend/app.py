@@ -757,6 +757,54 @@ def transaction_detail_screen():
             "before the transaction was automatically resolved."
         )
 
+    elif status == "AI_SUGGESTED":
+        st.info(
+            f"**AI_SUGGESTED** — {explanation_text}"
+        )
+
+        ai_reasoning = detail.get("ai_reasoning") or {}
+
+        if ai_reasoning.get("status") == "AI_VALIDATED":
+            st.markdown("### AI Reasoning")
+
+            ai_col1, ai_col2 = st.columns(2)
+
+            with ai_col1:
+                st.write(
+                    f"**Classification:** "
+                    f"{ai_reasoning.get('classification', '—')}"
+                )
+                st.write(
+                    f"**Recommended action:** "
+                    f"{ai_reasoning.get('recommended_action', '—')}"
+                )
+
+            with ai_col2:
+                ai_confidence = ai_reasoning.get("confidence")
+
+                if isinstance(ai_confidence, (int, float)):
+                    st.write(
+                        f"**AI confidence:** "
+                        f"{float(ai_confidence):.2%}"
+                    )
+                else:
+                    st.write("**AI confidence:** —")
+
+                st.write(
+                    f"**Validation status:** "
+                    f"{ai_reasoning.get('status', '—')}"
+                )
+
+            st.write(
+                f"**Reason:** "
+                f"{ai_reasoning.get('reason', 'No AI reason available.')}"
+            )
+
+        else:
+            st.warning(
+                "AI reasoning is not available as a validated structured response."
+            )
+
     elif status == "HUMAN_REVIEW":
         st.warning(
             f"**HUMAN_REVIEW** — {explanation_text}"
