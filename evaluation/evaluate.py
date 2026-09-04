@@ -59,13 +59,26 @@ def _is_match_prediction(decision: Any) -> bool:
     )
 
 
-def evaluate() -> dict[str, Any]:
-    orders = _load_csv(ORDERS_PATH)
-    payments = _load_csv(PAYMENTS_PATH)
-    settlements = _load_csv(SETTLEMENTS_PATH)
-    banks = _load_csv(BANK_PATH)
+def evaluate(
+    *,
+    data_dir: Path | None = None,
+    ground_truth_path: Path | None = None,
+) -> dict[str, Any]:
+    data_dir = data_dir or PROJECT_ROOT / "data" / "dev"
+    ground_truth_path = (
+        ground_truth_path
+        or PROJECT_ROOT
+        / "data"
+        / "ground_truth"
+        / "dev_ground_truth.csv"
+    )
 
-    ground_truth_df = pd.read_csv(GROUND_TRUTH_PATH)
+    orders = _load_csv(data_dir / "orders.csv")
+    payments = _load_csv(data_dir / "payments.csv")
+    settlements = _load_csv(data_dir / "settlements.csv")
+    banks = _load_csv(data_dir / "bank.csv")
+
+    ground_truth_df = pd.read_csv(ground_truth_path)
 
     ground_truth = ground_truth_df.to_dict(orient="records")
 
@@ -161,7 +174,31 @@ def evaluate() -> dict[str, Any]:
 
 
 if __name__ == "__main__":
-    metrics = evaluate()
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Evaluate LedgerPilot reconciliation against ground truth."
+    )
+    parser.add_argument(
+        "--data-dir",
+        type=Path,
+        default=PROJECT_ROOT / "data" / "dev",
+    )
+    parser.add_argument(
+        "--ground-truth",
+        type=Path,
+        default=PROJECT_ROOT
+        / "data"
+        / "ground_truth"
+        / "dev_ground_truth.csv",
+    )
+
+    args = parser.parse_args()
+
+    metrics = evaluate(
+        data_dir=args.data_dir,
+        ground_truth_path=args.ground_truth,
+    )
 
     print("LedgerPilot Evaluation")
     print("=" * 40)

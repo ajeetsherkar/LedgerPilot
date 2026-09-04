@@ -1,0 +1,15 @@
+{
+  "evaluation": "held_out",
+  "dataset": "data/heldout",
+  "ground_truth": "data/ground_truth/heldout_ground_truth.csv",
+  "total_ground_truth": 150,
+  "predicted_matches": 138,
+  "correct_matches": 130,
+  "match_rate": 0.8666666666666667,
+  "precision": 0.9420289855072463,
+  "recall": 0.8666666666666667,
+  "f1": 0.9027777777777778,
+  "auto_resolved_total": 123,
+  "auto_resolved_correct": 123,
+  "auto_resolution_precision": 1.0
+}
