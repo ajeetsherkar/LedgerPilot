@@ -505,7 +505,328 @@ def exceptions_screen():
 
 def transaction_detail_screen():
     st.title("Transaction Detail")
-    st.write("Transaction evidence and decision explanation will appear here.")
+    st.write(
+        "Inspect the evidence chain, deterministic verification, "
+        "and final decision."
+    )
+
+    try:
+        response = requests.get(
+            f"{API_BASE_URL}/results",
+            timeout=10,
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except requests.Timeout:
+        st.error("The backend timed out while loading reconciliation results.")
+        return
+    except requests.ConnectionError:
+        st.error(
+            "Could not connect to the LedgerPilot backend. "
+            "Make sure FastAPI is running."
+        )
+        return
+    except requests.RequestException as exc:
+        st.error(f"Failed to load reconciliation results: {exc}")
+        return
+    except ValueError:
+        st.error("The backend returned an invalid results response.")
+        return
+
+    if isinstance(payload, list):
+        results = payload
+    elif isinstance(payload, dict):
+        results = payload.get("results")
+        if results is None:
+            results = payload.get("data")
+        if results is None:
+            results = payload.get("items")
+    else:
+        results = None
+
+    if not isinstance(results, list):
+        st.error("Invalid reconciliation results returned by backend.")
+        return
+
+    valid_results = [
+        item
+        for item in results
+        if isinstance(item, dict) and item.get("result_id")
+    ]
+
+    if not valid_results:
+        st.info("No reconciliation results are available.")
+        return
+
+    result_options = [
+        item["result_id"]
+        for item in valid_results
+    ]
+
+    selected_result_id = st.selectbox(
+        "Select Transaction",
+        result_options,
+    )
+
+    try:
+        detail_response = requests.get(
+            f"{API_BASE_URL}/results/{selected_result_id}",
+            timeout=10,
+        )
+        detail_response.raise_for_status()
+        detail = detail_response.json()
+    except requests.Timeout:
+        st.error("The backend timed out while loading transaction details.")
+        return
+    except requests.ConnectionError:
+        st.error(
+            "Could not connect to the LedgerPilot backend. "
+            "Make sure FastAPI is running."
+        )
+        return
+    except requests.RequestException as exc:
+        st.error(f"Failed to load transaction details: {exc}")
+        return
+    except ValueError:
+        st.error(
+            "The backend returned an invalid transaction detail response."
+        )
+        return
+
+    if not isinstance(detail, dict):
+        st.error("Invalid transaction detail response from backend.")
+        return
+
+    status = detail.get("status", "UNKNOWN")
+    method = detail.get("method", "UNKNOWN")
+    confidence = detail.get("confidence")
+
+    st.divider()
+
+    summary_col1, summary_col2, summary_col3, summary_col4 = st.columns(4)
+
+    with summary_col1:
+        st.metric("Decision", status)
+
+    with summary_col2:
+        st.metric("Method", method)
+
+    with summary_col3:
+        if isinstance(confidence, (int, float)):
+            st.metric("Confidence", f"{float(confidence):.2%}")
+        else:
+            st.metric("Confidence", "—")
+
+    with summary_col4:
+        st.metric(
+            "Confidence bucket",
+            detail.get("confidence_bucket", "—"),
+        )
+
+    st.subheader("Evidence Chain")
+
+    evidence_chain = detail.get("evidence_chain") or {}
+
+    order = evidence_chain.get("order") or {}
+    payment = evidence_chain.get("payment") or {}
+    settlement = evidence_chain.get("settlement") or {}
+    bank = evidence_chain.get("bank") or {}
+
+    evidence_columns = st.columns(4)
+
+    with evidence_columns[0]:
+        st.markdown("### Order")
+        st.write(
+            f"**ID:** "
+            f"{order.get('id', detail.get('order_id', '—'))}"
+        )
+        st.write(f"**Amount:** {order.get('amount', '—')}")
+        st.write(f"**Currency:** {order.get('currency', '—')}")
+        st.write(f"**Date:** {order.get('date', '—')}")
+
+    with evidence_columns[1]:
+        st.markdown("### Payment")
+        st.write(
+            f"**ID:** "
+            f"{payment.get('id', detail.get('payment_id', '—'))}"
+        )
+        st.write(f"**Amount:** {payment.get('amount', '—')}")
+        st.write(f"**Currency:** {payment.get('currency', '—')}")
+        st.write(f"**Date:** {payment.get('date', '—')}")
+
+    with evidence_columns[2]:
+        st.markdown("### Settlement")
+        st.write(
+            f"**ID:** "
+            f"{settlement.get('id', detail.get('settlement_id', '—'))}"
+        )
+        st.write(f"**Gross:** {settlement.get('gross_amount', '—')}")
+        st.write(f"**Fee:** {settlement.get('platform_fee', '—')}")
+        st.write(f"**GST:** {settlement.get('gst_on_fee', '—')}")
+        st.write(f"**Net:** {settlement.get('net_amount', '—')}")
+        st.write(f"**Date:** {settlement.get('date', '—')}")
+        st.write(
+            f"**Reference:** "
+            f"{settlement.get('reference', '—')}"
+        )
+
+    with evidence_columns[3]:
+        st.markdown("### Bank")
+
+        if bank:
+            st.write(
+                f"**ID:** "
+                f"{bank.get('id', detail.get('bank_transaction_id', '—'))}"
+            )
+            st.write(f"**Credit:** {bank.get('credit_amount', '—')}")
+            st.write(f"**Currency:** {bank.get('currency', '—')}")
+            st.write(f"**Date:** {bank.get('date', '—')}")
+            st.write(f"**Reference:** {bank.get('reference', '—')}")
+            st.write(f"**Narration:** {bank.get('narration', '—')}")
+        else:
+            st.warning(
+                "No final bank transaction was selected. "
+                "The system did not resolve a bank record."
+            )
+
+    st.divider()
+
+    st.subheader("Verification Checklist")
+
+    verification = detail.get("verification") or {}
+
+    verification_items = [
+        ("Amount", "amount"),
+        ("Fee", "fee"),
+        ("Date", "date"),
+        ("Currency", "currency"),
+        ("Reference", "reference"),
+        ("Uniqueness", "uniqueness"),
+    ]
+
+    verification_rows = []
+
+    for label, key in verification_items:
+        check = verification.get(key) or {}
+        result_label = check.get("status", "—")
+
+        verification_rows.append(
+            {
+                "Check": label,
+                "Result": result_label,
+            }
+        )
+
+    st.dataframe(
+        verification_rows,
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    verification_reasons = verification.get("reasons") or []
+
+    if verification_reasons:
+        with st.expander("Verification details"):
+            for reason in verification_reasons:
+                st.write(f"• {reason}")
+
+    st.divider()
+
+    st.subheader("Why this decision?")
+
+    explanation = detail.get("decision_explanation") or {}
+    explanation_text = detail.get("reason") or "No explanation available."
+
+    if status == "AUTO_RESOLVED":
+        st.success(
+            f"**AUTO_RESOLVED** — {explanation_text}"
+        )
+
+        st.write(
+            f"**Evidence matched:** "
+            f"{explanation.get('method', method)}"
+        )
+
+        if isinstance(confidence, (int, float)):
+            st.write(
+                f"**Final confidence:** {float(confidence):.2%}"
+            )
+
+        st.write(
+            "The selected evidence passed deterministic verification "
+            "before the transaction was automatically resolved."
+        )
+
+    elif status == "HUMAN_REVIEW":
+        st.warning(
+            f"**HUMAN_REVIEW** — {explanation_text}"
+        )
+
+        ambiguity = detail.get("ambiguity") or {}
+        top_two = ambiguity.get("top_two_candidates") or []
+
+        if len(top_two) >= 2:
+            st.write("**Closest candidates:**")
+
+            candidate_rows = []
+
+            for candidate in top_two[:2]:
+                score = candidate.get("score")
+
+                if isinstance(score, (int, float)):
+                    display_score = f"{float(score):.2%}"
+                else:
+                    display_score = "—"
+
+                candidate_rows.append(
+                    {
+                        "Candidate": candidate.get(
+                            "transaction_id",
+                            "—",
+                        ),
+                        "Amount": candidate.get(
+                            "credit_amount",
+                            "—",
+                        ),
+                        "Reference": candidate.get(
+                            "reference",
+                            "—",
+                        ),
+                        "Score": display_score,
+                    }
+                )
+
+            st.dataframe(
+                candidate_rows,
+                use_container_width=True,
+                hide_index=True,
+            )
+
+            score_margin = ambiguity.get("margin_percentage_points")
+
+            if isinstance(score_margin, (int, float)):
+                st.write(
+                    f"**Score difference:** "
+                    f"{float(score_margin):.2f} percentage points"
+                )
+
+        escalation = detail.get("escalation_policy") or {}
+
+        st.info(
+            f"**Escalation policy:** "
+            f"{escalation.get('trigger', 'Configured ambiguity policy')}"
+        )
+
+        st.write(
+            "**Action:** "
+            f"{escalation.get('action', 'HUMAN_REVIEW')}"
+        )
+
+    else:
+        st.info(
+            f"**{status}** — {explanation_text}"
+        )
+
 
 
 SCREENS = {
