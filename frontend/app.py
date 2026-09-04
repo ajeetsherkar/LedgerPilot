@@ -1,7 +1,9 @@
+import json
 import os
 
 import requests
 import streamlit as st
+from pathlib import Path
 
 
 st.set_page_config(
@@ -306,6 +308,85 @@ def dashboard_screen():
 
     with col4:
         st.metric("Human review", human_review)
+
+    st.subheader("Held-out Evaluation Metrics")
+
+    metrics_path = (
+        Path(__file__).resolve().parent.parent
+        / "evaluation"
+        / "results"
+        / "held_out_metrics.json"
+    )
+
+    if not metrics_path.exists():
+        st.error(
+            "Frozen held-out evaluation metrics are unavailable."
+        )
+        return
+
+    try:
+        metrics_payload = json.loads(metrics_path.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        st.error(
+            f"Could not load frozen held-out evaluation metrics: {exc}"
+        )
+        return
+
+    required_metrics = [
+        "match_rate",
+        "precision",
+        "recall",
+        "f1",
+        "auto_resolution_precision",
+    ]
+
+    missing_metrics = [
+        metric
+        for metric in required_metrics
+        if metric not in metrics_payload
+        or not isinstance(metrics_payload[metric], (int, float))
+    ]
+
+    if missing_metrics:
+        st.error(
+            "Frozen held-out evaluation metrics are incomplete: "
+            + ", ".join(missing_metrics)
+        )
+        return
+
+    metric_col1, metric_col2, metric_col3, metric_col4, metric_col5 = (
+        st.columns(5)
+    )
+
+    with metric_col1:
+        st.metric(
+            "Match rate",
+            f"{metrics_payload['match_rate']:.2%}",
+        )
+
+    with metric_col2:
+        st.metric(
+            "Precision",
+            f"{metrics_payload['precision']:.2%}",
+        )
+
+    with metric_col3:
+        st.metric(
+            "Recall",
+            f"{metrics_payload['recall']:.2%}",
+        )
+
+    with metric_col4:
+        st.metric(
+            "F1",
+            f"{metrics_payload['f1']:.2%}",
+        )
+
+    with metric_col5:
+        st.metric(
+            "Auto-resolution precision",
+            f"{metrics_payload['auto_resolution_precision']:.2%}",
+        )
 
 
 def exceptions_screen():
