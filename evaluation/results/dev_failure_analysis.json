@@ -1,0 +1,1228 @@
+{
+  "analysis": "dev_failure_analysis",
+  "summary": {
+    "dataset": "data/dev",
+    "ground_truth": "data/ground_truth/dev_ground_truth.csv",
+    "total_records": 350,
+    "total_errors": 50,
+    "false_positive_wrong_match": 25,
+    "false_negative_missed_match": 25,
+    "scenario_counts": {
+      "UNKNOWN_REFERENCE": 16,
+      "PARTIAL_SETTLEMENT": 17,
+      "COMBINED_SETTLEMENT": 6,
+      "AMBIGUOUS_MATCH": 10,
+      "UNCLASSIFIED": 1
+    },
+    "cross_tab": {
+      "FALSE_POSITIVE / WRONG_MATCH | UNKNOWN_REFERENCE": 14,
+      "FALSE_NEGATIVE / MISSED_MATCH | PARTIAL_SETTLEMENT": 17,
+      "FALSE_NEGATIVE / MISSED_MATCH | COMBINED_SETTLEMENT": 6,
+      "FALSE_POSITIVE / WRONG_MATCH | AMBIGUOUS_MATCH": 10,
+      "FALSE_NEGATIVE / MISSED_MATCH | UNKNOWN_REFERENCE": 2,
+      "FALSE_POSITIVE / WRONG_MATCH | UNCLASSIFIED": 1
+    }
+  },
+  "failures": [
+    {
+      "order_id": "ORD0010",
+      "evaluation_class": "FALSE_POSITIVE / WRONG_MATCH",
+      "scenario_type": "UNKNOWN_REFERENCE",
+      "cause": "A plausible bank candidate may exist, but the settlement/bank reference relationship does not satisfy deterministic verification.",
+      "ground_truth_chain": {
+        "order_id": "ORD0010",
+        "payment_id": "PAY0010",
+        "settlement_id": "SET0010",
+        "bank_transaction_id": "BTX0010"
+      },
+      "predicted_chain": {
+        "order_id": "ORD0010",
+        "payment_id": "PAY0010",
+        "settlement_id": "SET0010",
+        "bank_transaction_id": null
+      },
+      "status": "HUMAN_REVIEW",
+      "method": "SIMILARITY",
+      "confidence": 0.788095,
+      "confidence_bucket": "MEDIUM",
+      "exception_type": "UNKNOWN_REFERENCE",
+      "reason": "Best bank candidate is plausible but requires manual review because the similarity score does not provide sufficient confidence for automatic matching. Deterministic verification failed: Settlement reference does not match bank reference. The proposed match failed deterministic verification and therefore requires human review. Medium-confidence case routed to AI reasoning service through the safe AI validation boundary."
+    },
+    {
+      "order_id": "ORD0018",
+      "evaluation_class": "FALSE_POSITIVE / WRONG_MATCH",
+      "scenario_type": "UNKNOWN_REFERENCE",
+      "cause": "A plausible bank candidate may exist, but the settlement/bank reference relationship does not satisfy deterministic verification.",
+      "ground_truth_chain": {
+        "order_id": "ORD0018",
+        "payment_id": "PAY0018",
+        "settlement_id": "SET0018",
+        "bank_transaction_id": "BTX0018"
+      },
+      "predicted_chain": {
+        "order_id": "ORD0018",
+        "payment_id": "PAY0018",
+        "settlement_id": "SET0018",
+        "bank_transaction_id": null
+      },
+      "status": "HUMAN_REVIEW",
+      "method": "SIMILARITY",
+      "confidence": 0.744324,
+      "confidence_bucket": "MEDIUM",
+      "exception_type": "UNKNOWN_REFERENCE",
+      "reason": "Best bank candidate is plausible but requires manual review because the similarity score does not provide sufficient confidence for automatic matching. Deterministic verification failed: Settlement net amount does not match bank credit amount. Bank amount does not satisfy the deterministic fee calculation. Settlement reference does not match bank reference. The proposed match failed deterministic verification and therefore requires human review. Medium-confidence case routed to AI reasoning service through the safe AI validation boundary."
+    },
+    {
+      "order_id": "ORD0026",
+      "evaluation_class": "FALSE_NEGATIVE / MISSED_MATCH",
+      "scenario_type": "PARTIAL_SETTLEMENT",
+      "cause": "The payment-to-settlement relationship is not a canonical one-to-one settlement chain, so the pipeline does not force a normal match.",
+      "ground_truth_chain": {
+        "order_id": "ORD0026",
+        "payment_id": "PAY0026",
+        "settlement_id": "SET0026",
+        "bank_transaction_id": "BTX0026"
+      },
+      "predicted_chain": {
+        "order_id": "ORD0026",
+        "payment_id": "PAY0026",
+        "settlement_id": "SET0026",
+        "bank_transaction_id": "BTX0026"
+      },
+      "status": "HUMAN_REVIEW",
+      "method": "NONE",
+      "confidence": 1.0,
+      "confidence_bucket": "HIGH",
+      "exception_type": "PARTIAL_SETTLEMENT",
+      "reason": "One payment is associated with multiple settlement records."
+    },
+    {
+      "order_id": "ORD0035",
+      "evaluation_class": "FALSE_NEGATIVE / MISSED_MATCH",
+      "scenario_type": "COMBINED_SETTLEMENT",
+      "cause": "Multiple payments are represented by a combined settlement/bank relationship that cannot be represented by the canonical one-to-one chain.",
+      "ground_truth_chain": {
+        "order_id": "ORD0035",
+        "payment_id": "PAY0035",
+        "settlement_id": "SET0035",
+        "bank_transaction_id": "BTX0035"
+      },
+      "predicted_chain": {
+        "order_id": "ORD0035",
+        "payment_id": "PAY0035",
+        "settlement_id": "SET0035",
+        "bank_transaction_id": "BTX0035_COMBINED"
+      },
+      "status": "HUMAN_REVIEW",
+      "method": "NONE",
+      "confidence": 1.0,
+      "confidence_bucket": "HIGH",
+      "exception_type": "COMBINED_SETTLEMENT",
+      "reason": "Multiple payments are represented by a single combined bank credit."
+    },
+    {
+      "order_id": "ORD0043",
+      "evaluation_class": "FALSE_POSITIVE / WRONG_MATCH",
+      "scenario_type": "UNKNOWN_REFERENCE",
+      "cause": "A plausible bank candidate may exist, but the settlement/bank reference relationship does not satisfy deterministic verification.",
+      "ground_truth_chain": {
+        "order_id": "ORD0043",
+        "payment_id": "PAY0043",
+        "settlement_id": "SET0043",
+        "bank_transaction_id": "BTX0043"
+      },
+      "predicted_chain": {
+        "order_id": "ORD0043",
+        "payment_id": "PAY0043",
+        "settlement_id": "SET0043",
+        "bank_transaction_id": null
+      },
+      "status": "HUMAN_REVIEW",
+      "method": "SIMILARITY",
+      "confidence": 0.745731,
+      "confidence_bucket": "MEDIUM",
+      "exception_type": "UNKNOWN_REFERENCE",
+      "reason": "Best bank candidate is plausible but requires manual review because the similarity score does not provide sufficient confidence for automatic matching. Deterministic verification failed: Settlement net amount does not match bank credit amount. Bank amount does not satisfy the deterministic fee calculation. Settlement reference does not match bank reference. The proposed match failed deterministic verification and therefore requires human review. Medium-confidence case routed to AI reasoning service through the safe AI validation boundary."
+    },
+    {
+      "order_id": "ORD0059",
+      "evaluation_class": "FALSE_POSITIVE / WRONG_MATCH",
+      "scenario_type": "AMBIGUOUS_MATCH",
+      "cause": "Multiple bank candidates are plausible and the score separation does not satisfy the configured ambiguity margin, so the system refuses to guess.",
+      "ground_truth_chain": {
+        "order_id": "ORD0059",
+        "payment_id": "PAY0059",
+        "settlement_id": "SET0059",
+        "bank_transaction_id": "BTX0059"
+      },
+      "predicted_chain": {
+        "order_id": "ORD0059",
+        "payment_id": "PAY0059",
+        "settlement_id": "SET0059",
+        "bank_transaction_id": null
+      },
+      "status": "HUMAN_REVIEW",
+      "method": "SIMILARITY",
+      "confidence": 0.0,
+      "confidence_bucket": "LOW",
+      "exception_type": "AMBIGUOUS_MATCH",
+      "reason": "Top two bank candidates have a score difference below the configured ambiguity margin. The system refuses to guess and requires human review. Deterministic verification failed: Settlement net amount does not match bank credit amount. Bank amount does not satisfy the deterministic fee calculation. Settlement reference does not match bank reference. The proposed match failed deterministic verification and therefore requires human review."
+    },
+    {
+      "order_id": "ORD0063",
+      "evaluation_class": "FALSE_NEGATIVE / MISSED_MATCH",
+      "scenario_type": "PARTIAL_SETTLEMENT",
+      "cause": "The payment-to-settlement relationship is not a canonical one-to-one settlement chain, so the pipeline does not force a normal match.",
+      "ground_truth_chain": {
+        "order_id": "ORD0063",
+        "payment_id": "PAY0063",
+        "settlement_id": "SET0063",
+        "bank_transaction_id": "BTX0063"
+      },
+      "predicted_chain": {
+        "order_id": "ORD0063",
+        "payment_id": "PAY0063",
+        "settlement_id": "SET0063",
+        "bank_transaction_id": "BTX0063"
+      },
+      "status": "HUMAN_REVIEW",
+      "method": "NONE",
+      "confidence": 1.0,
+      "confidence_bucket": "HIGH",
+      "exception_type": "PARTIAL_SETTLEMENT",
+      "reason": "One payment is associated with multiple settlement records."
+    },
+    {
+      "order_id": "ORD0069",
+      "evaluation_class": "FALSE_NEGATIVE / MISSED_MATCH",
+      "scenario_type": "PARTIAL_SETTLEMENT",
+      "cause": "The payment-to-settlement relationship is not a canonical one-to-one settlement chain, so the pipeline does not force a normal match.",
+      "ground_truth_chain": {
+        "order_id": "ORD0069",
+        "payment_id": "PAY0069",
+        "settlement_id": "SET0069",
+        "bank_transaction_id": "BTX0069"
+      },
+      "predicted_chain": {
+        "order_id": "ORD0069",
+        "payment_id": "PAY0069",
+        "settlement_id": "SET0069",
+        "bank_transaction_id": "BTX0069"
+      },
+      "status": "HUMAN_REVIEW",
+      "method": "NONE",
+      "confidence": 1.0,
+      "confidence_bucket": "HIGH",
+      "exception_type": "PARTIAL_SETTLEMENT",
+      "reason": "One payment is associated with multiple settlement records."
+    },
+    {
+      "order_id": "ORD0074",
+      "evaluation_class": "FALSE_POSITIVE / WRONG_MATCH",
+      "scenario_type": "UNKNOWN_REFERENCE",
+      "cause": "A plausible bank candidate may exist, but the settlement/bank reference relationship does not satisfy deterministic verification.",
+      "ground_truth_chain": {
+        "order_id": "ORD0074",
+        "payment_id": "PAY0074",
+        "settlement_id": "SET0074",
+        "bank_transaction_id": "BTX0074"
+      },
+      "predicted_chain": {
+        "order_id": "ORD0074",
+        "payment_id": "PAY0074",
+        "settlement_id": "SET0074",
+        "bank_transaction_id": null
+      },
+      "status": "HUMAN_REVIEW",
+      "method": "SIMILARITY",
+      "confidence": 0.788095,
+      "confidence_bucket": "MEDIUM",
+      "exception_type": "UNKNOWN_REFERENCE",
+      "reason": "Best bank candidate is plausible but requires manual review because the similarity score does not provide sufficient confidence for automatic matching. Deterministic verification failed: Settlement reference does not match bank reference. The proposed match failed deterministic verification and therefore requires human review. Medium-confidence case routed to AI reasoning service through the safe AI validation boundary."
+    },
+    {
+      "order_id": "ORD0080",
+      "evaluation_class": "FALSE_POSITIVE / WRONG_MATCH",
+      "scenario_type": "UNKNOWN_REFERENCE",
+      "cause": "A plausible bank candidate may exist, but the settlement/bank reference relationship does not satisfy deterministic verification.",
+      "ground_truth_chain": {
+        "order_id": "ORD0080",
+        "payment_id": "PAY0080",
+        "settlement_id": "SET0080",
+        "bank_transaction_id": "BTX0080"
+      },
+      "predicted_chain": {
+        "order_id": "ORD0080",
+        "payment_id": "PAY0080",
+        "settlement_id": "SET0080",
+        "bank_transaction_id": null
+      },
+      "status": "HUMAN_REVIEW",
+      "method": "SIMILARITY",
+      "confidence": 0.715195,
+      "confidence_bucket": "MEDIUM",
+      "exception_type": "UNKNOWN_REFERENCE",
+      "reason": "Best bank candidate is plausible but requires manual review because the similarity score does not provide sufficient confidence for automatic matching. Deterministic verification failed: Settlement net amount does not match bank credit amount. Bank amount does not satisfy the deterministic fee calculation. Settlement reference does not match bank reference. The proposed match failed deterministic verification and therefore requires human review. Medium-confidence case routed to AI reasoning service through the safe AI validation boundary."
+    },
+    {
+      "order_id": "ORD0089",
+      "evaluation_class": "FALSE_POSITIVE / WRONG_MATCH",
+      "scenario_type": "AMBIGUOUS_MATCH",
+      "cause": "Multiple bank candidates are plausible and the score separation does not satisfy the configured ambiguity margin, so the system refuses to guess.",
+      "ground_truth_chain": {
+        "order_id": "ORD0089",
+        "payment_id": "PAY0089",
+        "settlement_id": "SET0089",
+        "bank_transaction_id": "BTX0089"
+      },
+      "predicted_chain": {
+        "order_id": "ORD0089",
+        "payment_id": "PAY0089",
+        "settlement_id": "SET0089",
+        "bank_transaction_id": null
+      },
+      "status": "HUMAN_REVIEW",
+      "method": "SIMILARITY",
+      "confidence": 0.0,
+      "confidence_bucket": "LOW",
+      "exception_type": "AMBIGUOUS_MATCH",
+      "reason": "Top two bank candidates have a score difference below the configured ambiguity margin. The system refuses to guess and requires human review. Deterministic verification failed: Settlement net amount does not match bank credit amount. Bank amount does not satisfy the deterministic fee calculation. Settlement reference does not match bank reference. The proposed match failed deterministic verification and therefore requires human review."
+    },
+    {
+      "order_id": "ORD0095",
+      "evaluation_class": "FALSE_POSITIVE / WRONG_MATCH",
+      "scenario_type": "UNKNOWN_REFERENCE",
+      "cause": "A plausible bank candidate may exist, but the settlement/bank reference relationship does not satisfy deterministic verification.",
+      "ground_truth_chain": {
+        "order_id": "ORD0095",
+        "payment_id": "PAY0095",
+        "settlement_id": "SET0095",
+        "bank_transaction_id": "BTX0095"
+      },
+      "predicted_chain": {
+        "order_id": "ORD0095",
+        "payment_id": "PAY0095",
+        "settlement_id": "SET0095",
+        "bank_transaction_id": null
+      },
+      "status": "HUMAN_REVIEW",
+      "method": "SIMILARITY",
+      "confidence": 0.726334,
+      "confidence_bucket": "MEDIUM",
+      "exception_type": "UNKNOWN_REFERENCE",
+      "reason": "Best bank candidate is plausible but requires manual review because the similarity score does not provide sufficient confidence for automatic matching. Deterministic verification failed: Settlement net amount does not match bank credit amount. Bank amount does not satisfy the deterministic fee calculation. Settlement reference does not match bank reference. The proposed match failed deterministic verification and therefore requires human review. Medium-confidence case routed to AI reasoning service through the safe AI validation boundary."
+    },
+    {
+      "order_id": "ORD0097",
+      "evaluation_class": "FALSE_NEGATIVE / MISSED_MATCH",
+      "scenario_type": "COMBINED_SETTLEMENT",
+      "cause": "Multiple payments are represented by a combined settlement/bank relationship that cannot be represented by the canonical one-to-one chain.",
+      "ground_truth_chain": {
+        "order_id": "ORD0097",
+        "payment_id": "PAY0097",
+        "settlement_id": "SET0097",
+        "bank_transaction_id": "BTX0097"
+      },
+      "predicted_chain": {
+        "order_id": "ORD0097",
+        "payment_id": "PAY0097",
+        "settlement_id": "SET0097",
+        "bank_transaction_id": "BTX0186_COMBINED"
+      },
+      "status": "HUMAN_REVIEW",
+      "method": "NONE",
+      "confidence": 1.0,
+      "confidence_bucket": "HIGH",
+      "exception_type": "COMBINED_SETTLEMENT",
+      "reason": "Multiple payments are represented by a single combined bank credit."
+    },
+    {
+      "order_id": "ORD0101",
+      "evaluation_class": "FALSE_POSITIVE / WRONG_MATCH",
+      "scenario_type": "UNKNOWN_REFERENCE",
+      "cause": "A plausible bank candidate may exist, but the settlement/bank reference relationship does not satisfy deterministic verification.",
+      "ground_truth_chain": {
+        "order_id": "ORD0101",
+        "payment_id": "PAY0101",
+        "settlement_id": "SET0101",
+        "bank_transaction_id": "BTX0101"
+      },
+      "predicted_chain": {
+        "order_id": "ORD0101",
+        "payment_id": "PAY0101",
+        "settlement_id": "SET0101",
+        "bank_transaction_id": null
+      },
+      "status": "HUMAN_REVIEW",
+      "method": "SIMILARITY",
+      "confidence": 0.773732,
+      "confidence_bucket": "MEDIUM",
+      "exception_type": "UNKNOWN_REFERENCE",
+      "reason": "Best bank candidate is plausible but requires manual review because the similarity score does not provide sufficient confidence for automatic matching. Deterministic verification failed: Settlement net amount does not match bank credit amount. Bank amount does not satisfy the deterministic fee calculation. Settlement reference does not match bank reference. The proposed match failed deterministic verification and therefore requires human review. Medium-confidence case routed to AI reasoning service through the safe AI validation boundary."
+    },
+    {
+      "order_id": "ORD0129",
+      "evaluation_class": "FALSE_NEGATIVE / MISSED_MATCH",
+      "scenario_type": "PARTIAL_SETTLEMENT",
+      "cause": "The payment-to-settlement relationship is not a canonical one-to-one settlement chain, so the pipeline does not force a normal match.",
+      "ground_truth_chain": {
+        "order_id": "ORD0129",
+        "payment_id": "PAY0129",
+        "settlement_id": "SET0129",
+        "bank_transaction_id": "BTX0129"
+      },
+      "predicted_chain": {
+        "order_id": "ORD0129",
+        "payment_id": "PAY0129",
+        "settlement_id": "SET0129",
+        "bank_transaction_id": "BTX0129"
+      },
+      "status": "HUMAN_REVIEW",
+      "method": "NONE",
+      "confidence": 1.0,
+      "confidence_bucket": "HIGH",
+      "exception_type": "PARTIAL_SETTLEMENT",
+      "reason": "One payment is associated with multiple settlement records."
+    },
+    {
+      "order_id": "ORD0135",
+      "evaluation_class": "FALSE_NEGATIVE / MISSED_MATCH",
+      "scenario_type": "PARTIAL_SETTLEMENT",
+      "cause": "The payment-to-settlement relationship is not a canonical one-to-one settlement chain, so the pipeline does not force a normal match.",
+      "ground_truth_chain": {
+        "order_id": "ORD0135",
+        "payment_id": "PAY0135",
+        "settlement_id": "SET0135",
+        "bank_transaction_id": "BTX0135"
+      },
+      "predicted_chain": {
+        "order_id": "ORD0135",
+        "payment_id": "PAY0135",
+        "settlement_id": "SET0135",
+        "bank_transaction_id": "BTX0135"
+      },
+      "status": "HUMAN_REVIEW",
+      "method": "NONE",
+      "confidence": 1.0,
+      "confidence_bucket": "HIGH",
+      "exception_type": "PARTIAL_SETTLEMENT",
+      "reason": "One payment is associated with multiple settlement records."
+    },
+    {
+      "order_id": "ORD0157",
+      "evaluation_class": "FALSE_POSITIVE / WRONG_MATCH",
+      "scenario_type": "UNKNOWN_REFERENCE",
+      "cause": "A plausible bank candidate may exist, but the settlement/bank reference relationship does not satisfy deterministic verification.",
+      "ground_truth_chain": {
+        "order_id": "ORD0157",
+        "payment_id": "PAY0157",
+        "settlement_id": "SET0157",
+        "bank_transaction_id": "BTX0157"
+      },
+      "predicted_chain": {
+        "order_id": "ORD0157",
+        "payment_id": "PAY0157",
+        "settlement_id": "SET0157",
+        "bank_transaction_id": null
+      },
+      "status": "HUMAN_REVIEW",
+      "method": "SIMILARITY",
+      "confidence": 0.788095,
+      "confidence_bucket": "MEDIUM",
+      "exception_type": "UNKNOWN_REFERENCE",
+      "reason": "Best bank candidate is plausible but requires manual review because the similarity score does not provide sufficient confidence for automatic matching. Deterministic verification failed: Settlement reference does not match bank reference. The proposed match failed deterministic verification and therefore requires human review. Medium-confidence case routed to AI reasoning service through the safe AI validation boundary."
+    },
+    {
+      "order_id": "ORD0159",
+      "evaluation_class": "FALSE_POSITIVE / WRONG_MATCH",
+      "scenario_type": "AMBIGUOUS_MATCH",
+      "cause": "Multiple bank candidates are plausible and the score separation does not satisfy the configured ambiguity margin, so the system refuses to guess.",
+      "ground_truth_chain": {
+        "order_id": "ORD0159",
+        "payment_id": "PAY0159",
+        "settlement_id": "SET0159",
+        "bank_transaction_id": "BTX0159"
+      },
+      "predicted_chain": {
+        "order_id": "ORD0159",
+        "payment_id": "PAY0159",
+        "settlement_id": "SET0159",
+        "bank_transaction_id": null
+      },
+      "status": "HUMAN_REVIEW",
+      "method": "SIMILARITY",
+      "confidence": 0.0,
+      "confidence_bucket": "LOW",
+      "exception_type": "AMBIGUOUS_MATCH",
+      "reason": "Top two bank candidates have a score difference below the configured ambiguity margin. The system refuses to guess and requires human review. Deterministic verification failed: Settlement net amount does not match bank credit amount. Bank amount does not satisfy the deterministic fee calculation. Settlement reference does not match bank reference. The proposed match failed deterministic verification and therefore requires human review."
+    },
+    {
+      "order_id": "ORD0160",
+      "evaluation_class": "FALSE_NEGATIVE / MISSED_MATCH",
+      "scenario_type": "PARTIAL_SETTLEMENT",
+      "cause": "The payment-to-settlement relationship is not a canonical one-to-one settlement chain, so the pipeline does not force a normal match.",
+      "ground_truth_chain": {
+        "order_id": "ORD0160",
+        "payment_id": "PAY0160",
+        "settlement_id": "SET0160",
+        "bank_transaction_id": "BTX0160"
+      },
+      "predicted_chain": {
+        "order_id": "ORD0160",
+        "payment_id": "PAY0160",
+        "settlement_id": "SET0160",
+        "bank_transaction_id": "BTX0160"
+      },
+      "status": "HUMAN_REVIEW",
+      "method": "NONE",
+      "confidence": 1.0,
+      "confidence_bucket": "HIGH",
+      "exception_type": "PARTIAL_SETTLEMENT",
+      "reason": "One payment is associated with multiple settlement records."
+    },
+    {
+      "order_id": "ORD0171",
+      "evaluation_class": "FALSE_NEGATIVE / MISSED_MATCH",
+      "scenario_type": "PARTIAL_SETTLEMENT",
+      "cause": "The payment-to-settlement relationship is not a canonical one-to-one settlement chain, so the pipeline does not force a normal match.",
+      "ground_truth_chain": {
+        "order_id": "ORD0171",
+        "payment_id": "PAY0171",
+        "settlement_id": "SET0171",
+        "bank_transaction_id": "BTX0171"
+      },
+      "predicted_chain": {
+        "order_id": "ORD0171",
+        "payment_id": "PAY0171",
+        "settlement_id": "SET0171",
+        "bank_transaction_id": "BTX0171"
+      },
+      "status": "HUMAN_REVIEW",
+      "method": "NONE",
+      "confidence": 1.0,
+      "confidence_bucket": "HIGH",
+      "exception_type": "PARTIAL_SETTLEMENT",
+      "reason": "One payment is associated with multiple settlement records."
+    },
+    {
+      "order_id": "ORD0175",
+      "evaluation_class": "FALSE_POSITIVE / WRONG_MATCH",
+      "scenario_type": "AMBIGUOUS_MATCH",
+      "cause": "Multiple bank candidates are plausible and the score separation does not satisfy the configured ambiguity margin, so the system refuses to guess.",
+      "ground_truth_chain": {
+        "order_id": "ORD0175",
+        "payment_id": "PAY0175",
+        "settlement_id": "SET0175",
+        "bank_transaction_id": "BTX0175"
+      },
+      "predicted_chain": {
+        "order_id": "ORD0175",
+        "payment_id": "PAY0175",
+        "settlement_id": "SET0175",
+        "bank_transaction_id": null
+      },
+      "status": "HUMAN_REVIEW",
+      "method": "SIMILARITY",
+      "confidence": 0.0,
+      "confidence_bucket": "LOW",
+      "exception_type": "AMBIGUOUS_MATCH",
+      "reason": "Top two bank candidates have a score difference below the configured ambiguity margin. The system refuses to guess and requires human review. Deterministic verification failed: Settlement net amount does not match bank credit amount. Bank amount does not satisfy the deterministic fee calculation. Settlement reference does not match bank reference. The proposed match failed deterministic verification and therefore requires human review."
+    },
+    {
+      "order_id": "ORD0186",
+      "evaluation_class": "FALSE_NEGATIVE / MISSED_MATCH",
+      "scenario_type": "COMBINED_SETTLEMENT",
+      "cause": "Multiple payments are represented by a combined settlement/bank relationship that cannot be represented by the canonical one-to-one chain.",
+      "ground_truth_chain": {
+        "order_id": "ORD0186",
+        "payment_id": "PAY0186",
+        "settlement_id": "SET0186",
+        "bank_transaction_id": "BTX0186"
+      },
+      "predicted_chain": {
+        "order_id": "ORD0186",
+        "payment_id": "PAY0186",
+        "settlement_id": "SET0186",
+        "bank_transaction_id": "BTX0186_COMBINED"
+      },
+      "status": "HUMAN_REVIEW",
+      "method": "NONE",
+      "confidence": 1.0,
+      "confidence_bucket": "HIGH",
+      "exception_type": "COMBINED_SETTLEMENT",
+      "reason": "Multiple payments are represented by a single combined bank credit."
+    },
+    {
+      "order_id": "ORD0189",
+      "evaluation_class": "FALSE_NEGATIVE / MISSED_MATCH",
+      "scenario_type": "PARTIAL_SETTLEMENT",
+      "cause": "The payment-to-settlement relationship is not a canonical one-to-one settlement chain, so the pipeline does not force a normal match.",
+      "ground_truth_chain": {
+        "order_id": "ORD0189",
+        "payment_id": "PAY0189",
+        "settlement_id": "SET0189",
+        "bank_transaction_id": "BTX0189"
+      },
+      "predicted_chain": {
+        "order_id": "ORD0189",
+        "payment_id": "PAY0189",
+        "settlement_id": "SET0189",
+        "bank_transaction_id": "BTX0189"
+      },
+      "status": "HUMAN_REVIEW",
+      "method": "NONE",
+      "confidence": 1.0,
+      "confidence_bucket": "HIGH",
+      "exception_type": "PARTIAL_SETTLEMENT",
+      "reason": "One payment is associated with multiple settlement records."
+    },
+    {
+      "order_id": "ORD0194",
+      "evaluation_class": "FALSE_POSITIVE / WRONG_MATCH",
+      "scenario_type": "UNKNOWN_REFERENCE",
+      "cause": "A plausible bank candidate may exist, but the settlement/bank reference relationship does not satisfy deterministic verification.",
+      "ground_truth_chain": {
+        "order_id": "ORD0194",
+        "payment_id": "PAY0194",
+        "settlement_id": "SET0194",
+        "bank_transaction_id": "BTX0194"
+      },
+      "predicted_chain": {
+        "order_id": "ORD0194",
+        "payment_id": "PAY0194",
+        "settlement_id": "SET0194",
+        "bank_transaction_id": null
+      },
+      "status": "HUMAN_REVIEW",
+      "method": "SIMILARITY",
+      "confidence": 0.788095,
+      "confidence_bucket": "MEDIUM",
+      "exception_type": "UNKNOWN_REFERENCE",
+      "reason": "Best bank candidate is plausible but requires manual review because the similarity score does not provide sufficient confidence for automatic matching. Deterministic verification failed: Settlement reference does not match bank reference. The proposed match failed deterministic verification and therefore requires human review. Medium-confidence case routed to AI reasoning service through the safe AI validation boundary."
+    },
+    {
+      "order_id": "ORD0196",
+      "evaluation_class": "FALSE_POSITIVE / WRONG_MATCH",
+      "scenario_type": "UNKNOWN_REFERENCE",
+      "cause": "A plausible bank candidate may exist, but the settlement/bank reference relationship does not satisfy deterministic verification.",
+      "ground_truth_chain": {
+        "order_id": "ORD0196",
+        "payment_id": "PAY0196",
+        "settlement_id": "SET0196",
+        "bank_transaction_id": "BTX0196"
+      },
+      "predicted_chain": {
+        "order_id": "ORD0196",
+        "payment_id": "PAY0196",
+        "settlement_id": "SET0196",
+        "bank_transaction_id": null
+      },
+      "status": "HUMAN_REVIEW",
+      "method": "SIMILARITY",
+      "confidence": 0.788095,
+      "confidence_bucket": "MEDIUM",
+      "exception_type": "UNKNOWN_REFERENCE",
+      "reason": "Best bank candidate is plausible but requires manual review because the similarity score does not provide sufficient confidence for automatic matching. Deterministic verification failed: Settlement reference does not match bank reference. The proposed match failed deterministic verification and therefore requires human review. Medium-confidence case routed to AI reasoning service through the safe AI validation boundary."
+    },
+    {
+      "order_id": "ORD0205",
+      "evaluation_class": "FALSE_NEGATIVE / MISSED_MATCH",
+      "scenario_type": "PARTIAL_SETTLEMENT",
+      "cause": "The payment-to-settlement relationship is not a canonical one-to-one settlement chain, so the pipeline does not force a normal match.",
+      "ground_truth_chain": {
+        "order_id": "ORD0205",
+        "payment_id": "PAY0205",
+        "settlement_id": "SET0205",
+        "bank_transaction_id": "BTX0205"
+      },
+      "predicted_chain": {
+        "order_id": "ORD0205",
+        "payment_id": "PAY0205",
+        "settlement_id": "SET0205",
+        "bank_transaction_id": "BTX0205"
+      },
+      "status": "HUMAN_REVIEW",
+      "method": "NONE",
+      "confidence": 1.0,
+      "confidence_bucket": "HIGH",
+      "exception_type": "PARTIAL_SETTLEMENT",
+      "reason": "One payment is associated with multiple settlement records."
+    },
+    {
+      "order_id": "ORD0215",
+      "evaluation_class": "FALSE_NEGATIVE / MISSED_MATCH",
+      "scenario_type": "PARTIAL_SETTLEMENT",
+      "cause": "The payment-to-settlement relationship is not a canonical one-to-one settlement chain, so the pipeline does not force a normal match.",
+      "ground_truth_chain": {
+        "order_id": "ORD0215",
+        "payment_id": "PAY0215",
+        "settlement_id": "SET0215",
+        "bank_transaction_id": "BTX0215"
+      },
+      "predicted_chain": {
+        "order_id": "ORD0215",
+        "payment_id": "PAY0215",
+        "settlement_id": "SET0215",
+        "bank_transaction_id": "BTX0215"
+      },
+      "status": "HUMAN_REVIEW",
+      "method": "NONE",
+      "confidence": 1.0,
+      "confidence_bucket": "HIGH",
+      "exception_type": "PARTIAL_SETTLEMENT",
+      "reason": "One payment is associated with multiple settlement records."
+    },
+    {
+      "order_id": "ORD0220",
+      "evaluation_class": "FALSE_NEGATIVE / MISSED_MATCH",
+      "scenario_type": "PARTIAL_SETTLEMENT",
+      "cause": "The payment-to-settlement relationship is not a canonical one-to-one settlement chain, so the pipeline does not force a normal match.",
+      "ground_truth_chain": {
+        "order_id": "ORD0220",
+        "payment_id": "PAY0220",
+        "settlement_id": "SET0220",
+        "bank_transaction_id": "BTX0220"
+      },
+      "predicted_chain": {
+        "order_id": "ORD0220",
+        "payment_id": "PAY0220",
+        "settlement_id": "SET0220",
+        "bank_transaction_id": "BTX0220"
+      },
+      "status": "HUMAN_REVIEW",
+      "method": "NONE",
+      "confidence": 1.0,
+      "confidence_bucket": "HIGH",
+      "exception_type": "PARTIAL_SETTLEMENT",
+      "reason": "One payment is associated with multiple settlement records."
+    },
+    {
+      "order_id": "ORD0224",
+      "evaluation_class": "FALSE_NEGATIVE / MISSED_MATCH",
+      "scenario_type": "COMBINED_SETTLEMENT",
+      "cause": "Multiple payments are represented by a combined settlement/bank relationship that cannot be represented by the canonical one-to-one chain.",
+      "ground_truth_chain": {
+        "order_id": "ORD0224",
+        "payment_id": "PAY0224",
+        "settlement_id": "SET0224",
+        "bank_transaction_id": "BTX0224"
+      },
+      "predicted_chain": {
+        "order_id": "ORD0224",
+        "payment_id": "PAY0224",
+        "settlement_id": "SET0224",
+        "bank_transaction_id": "BTX0035_COMBINED"
+      },
+      "status": "HUMAN_REVIEW",
+      "method": "NONE",
+      "confidence": 1.0,
+      "confidence_bucket": "HIGH",
+      "exception_type": "COMBINED_SETTLEMENT",
+      "reason": "Multiple payments are represented by a single combined bank credit."
+    },
+    {
+      "order_id": "ORD0226",
+      "evaluation_class": "FALSE_POSITIVE / WRONG_MATCH",
+      "scenario_type": "UNKNOWN_REFERENCE",
+      "cause": "A plausible bank candidate may exist, but the settlement/bank reference relationship does not satisfy deterministic verification.",
+      "ground_truth_chain": {
+        "order_id": "ORD0226",
+        "payment_id": "PAY0226",
+        "settlement_id": "SET0226",
+        "bank_transaction_id": "BTX0226"
+      },
+      "predicted_chain": {
+        "order_id": "ORD0226",
+        "payment_id": "PAY0226",
+        "settlement_id": "SET0226",
+        "bank_transaction_id": null
+      },
+      "status": "HUMAN_REVIEW",
+      "method": "SIMILARITY",
+      "confidence": 0.788095,
+      "confidence_bucket": "MEDIUM",
+      "exception_type": "UNKNOWN_REFERENCE",
+      "reason": "Best bank candidate is plausible but requires manual review because the similarity score does not provide sufficient confidence for automatic matching. Deterministic verification failed: Settlement reference does not match bank reference. The proposed match failed deterministic verification and therefore requires human review. Medium-confidence case routed to AI reasoning service through the safe AI validation boundary."
+    },
+    {
+      "order_id": "ORD0227",
+      "evaluation_class": "FALSE_NEGATIVE / MISSED_MATCH",
+      "scenario_type": "PARTIAL_SETTLEMENT",
+      "cause": "The payment-to-settlement relationship is not a canonical one-to-one settlement chain, so the pipeline does not force a normal match.",
+      "ground_truth_chain": {
+        "order_id": "ORD0227",
+        "payment_id": "PAY0227",
+        "settlement_id": "SET0227",
+        "bank_transaction_id": "BTX0227"
+      },
+      "predicted_chain": {
+        "order_id": "ORD0227",
+        "payment_id": "PAY0227",
+        "settlement_id": "SET0227",
+        "bank_transaction_id": "BTX0227"
+      },
+      "status": "HUMAN_REVIEW",
+      "method": "NONE",
+      "confidence": 1.0,
+      "confidence_bucket": "HIGH",
+      "exception_type": "PARTIAL_SETTLEMENT",
+      "reason": "One payment is associated with multiple settlement records."
+    },
+    {
+      "order_id": "ORD0229",
+      "evaluation_class": "FALSE_POSITIVE / WRONG_MATCH",
+      "scenario_type": "AMBIGUOUS_MATCH",
+      "cause": "Multiple bank candidates are plausible and the score separation does not satisfy the configured ambiguity margin, so the system refuses to guess.",
+      "ground_truth_chain": {
+        "order_id": "ORD0229",
+        "payment_id": "PAY0229",
+        "settlement_id": "SET0229",
+        "bank_transaction_id": "BTX0229"
+      },
+      "predicted_chain": {
+        "order_id": "ORD0229",
+        "payment_id": "PAY0229",
+        "settlement_id": "SET0229",
+        "bank_transaction_id": null
+      },
+      "status": "HUMAN_REVIEW",
+      "method": "SIMILARITY",
+      "confidence": 0.0,
+      "confidence_bucket": "LOW",
+      "exception_type": "AMBIGUOUS_MATCH",
+      "reason": "Top two bank candidates have a score difference below the configured ambiguity margin. The system refuses to guess and requires human review. Deterministic verification failed: Settlement reference does not match bank reference. The proposed match failed deterministic verification and therefore requires human review."
+    },
+    {
+      "order_id": "ORD0236",
+      "evaluation_class": "FALSE_NEGATIVE / MISSED_MATCH",
+      "scenario_type": "UNKNOWN_REFERENCE",
+      "cause": "A plausible bank candidate may exist, but the settlement/bank reference relationship does not satisfy deterministic verification.",
+      "ground_truth_chain": {
+        "order_id": "ORD0236",
+        "payment_id": "PAY0236",
+        "settlement_id": "SET0236",
+        "bank_transaction_id": "BTX0236"
+      },
+      "predicted_chain": {
+        "order_id": "ORD0236",
+        "payment_id": "PAY0236",
+        "settlement_id": "SET0236",
+        "bank_transaction_id": null
+      },
+      "status": "HUMAN_REVIEW",
+      "method": "NONE",
+      "confidence": 0.0,
+      "confidence_bucket": "LOW",
+      "exception_type": "UNKNOWN_REFERENCE",
+      "reason": "No deterministic reconciliation strategy matched the transaction chain and no similarity candidate produced a reviewable result."
+    },
+    {
+      "order_id": "ORD0239",
+      "evaluation_class": "FALSE_POSITIVE / WRONG_MATCH",
+      "scenario_type": "UNCLASSIFIED",
+      "cause": "Best bank candidate is plausible but requires manual review because the similarity score does not provide sufficient confidence for automatic matching. Deterministic verification failed: Settlement net amount does not match bank credit amount. Bank amount does not satisfy the deterministic fee calculation. Bank transaction date occurs before the settlement date or is invalid. Settlement reference does not match bank reference. The proposed match failed deterministic verification and therefore requires human review.",
+      "ground_truth_chain": {
+        "order_id": "ORD0239",
+        "payment_id": "PAY0239",
+        "settlement_id": "SET0239",
+        "bank_transaction_id": "BTX0239"
+      },
+      "predicted_chain": {
+        "order_id": "ORD0239",
+        "payment_id": "PAY0239",
+        "settlement_id": "SET0239",
+        "bank_transaction_id": null
+      },
+      "status": "HUMAN_REVIEW",
+      "method": "SIMILARITY",
+      "confidence": 0.673603,
+      "confidence_bucket": "LOW",
+      "exception_type": null,
+      "reason": "Best bank candidate is plausible but requires manual review because the similarity score does not provide sufficient confidence for automatic matching. Deterministic verification failed: Settlement net amount does not match bank credit amount. Bank amount does not satisfy the deterministic fee calculation. Bank transaction date occurs before the settlement date or is invalid. Settlement reference does not match bank reference. The proposed match failed deterministic verification and therefore requires human review."
+    },
+    {
+      "order_id": "ORD0253",
+      "evaluation_class": "FALSE_NEGATIVE / MISSED_MATCH",
+      "scenario_type": "UNKNOWN_REFERENCE",
+      "cause": "A plausible bank candidate may exist, but the settlement/bank reference relationship does not satisfy deterministic verification.",
+      "ground_truth_chain": {
+        "order_id": "ORD0253",
+        "payment_id": "PAY0253",
+        "settlement_id": "SET0253",
+        "bank_transaction_id": "BTX0253"
+      },
+      "predicted_chain": {
+        "order_id": "ORD0253",
+        "payment_id": "PAY0253",
+        "settlement_id": "SET0253",
+        "bank_transaction_id": null
+      },
+      "status": "HUMAN_REVIEW",
+      "method": "NONE",
+      "confidence": 0.0,
+      "confidence_bucket": "LOW",
+      "exception_type": "UNKNOWN_REFERENCE",
+      "reason": "No deterministic reconciliation strategy matched the transaction chain and no similarity candidate produced a reviewable result."
+    },
+    {
+      "order_id": "ORD0263",
+      "evaluation_class": "FALSE_POSITIVE / WRONG_MATCH",
+      "scenario_type": "AMBIGUOUS_MATCH",
+      "cause": "Multiple bank candidates are plausible and the score separation does not satisfy the configured ambiguity margin, so the system refuses to guess.",
+      "ground_truth_chain": {
+        "order_id": "ORD0263",
+        "payment_id": "PAY0263",
+        "settlement_id": "SET0263",
+        "bank_transaction_id": "BTX0263"
+      },
+      "predicted_chain": {
+        "order_id": "ORD0263",
+        "payment_id": "PAY0263",
+        "settlement_id": "SET0263",
+        "bank_transaction_id": null
+      },
+      "status": "HUMAN_REVIEW",
+      "method": "SIMILARITY",
+      "confidence": 0.0,
+      "confidence_bucket": "LOW",
+      "exception_type": "AMBIGUOUS_MATCH",
+      "reason": "Top two bank candidates have a score difference below the configured ambiguity margin. The system refuses to guess and requires human review. Deterministic verification failed: Settlement net amount does not match bank credit amount. Bank amount does not satisfy the deterministic fee calculation. Settlement reference does not match bank reference. The proposed match failed deterministic verification and therefore requires human review."
+    },
+    {
+      "order_id": "ORD0271",
+      "evaluation_class": "FALSE_NEGATIVE / MISSED_MATCH",
+      "scenario_type": "PARTIAL_SETTLEMENT",
+      "cause": "The payment-to-settlement relationship is not a canonical one-to-one settlement chain, so the pipeline does not force a normal match.",
+      "ground_truth_chain": {
+        "order_id": "ORD0271",
+        "payment_id": "PAY0271",
+        "settlement_id": "SET0271",
+        "bank_transaction_id": "BTX0271"
+      },
+      "predicted_chain": {
+        "order_id": "ORD0271",
+        "payment_id": "PAY0271",
+        "settlement_id": "SET0271",
+        "bank_transaction_id": "BTX0271"
+      },
+      "status": "HUMAN_REVIEW",
+      "method": "NONE",
+      "confidence": 1.0,
+      "confidence_bucket": "HIGH",
+      "exception_type": "PARTIAL_SETTLEMENT",
+      "reason": "One payment is associated with multiple settlement records."
+    },
+    {
+      "order_id": "ORD0275",
+      "evaluation_class": "FALSE_POSITIVE / WRONG_MATCH",
+      "scenario_type": "AMBIGUOUS_MATCH",
+      "cause": "Multiple bank candidates are plausible and the score separation does not satisfy the configured ambiguity margin, so the system refuses to guess.",
+      "ground_truth_chain": {
+        "order_id": "ORD0275",
+        "payment_id": "PAY0275",
+        "settlement_id": "SET0275",
+        "bank_transaction_id": "BTX0275"
+      },
+      "predicted_chain": {
+        "order_id": "ORD0275",
+        "payment_id": "PAY0275",
+        "settlement_id": "SET0275",
+        "bank_transaction_id": null
+      },
+      "status": "HUMAN_REVIEW",
+      "method": "SIMILARITY",
+      "confidence": 0.0,
+      "confidence_bucket": "LOW",
+      "exception_type": "AMBIGUOUS_MATCH",
+      "reason": "Top two bank candidates have a score difference below the configured ambiguity margin. The system refuses to guess and requires human review. Deterministic verification failed: Settlement net amount does not match bank credit amount. Bank amount does not satisfy the deterministic fee calculation. Bank transaction date occurs before the settlement date or is invalid. Settlement reference does not match bank reference. The proposed match failed deterministic verification and therefore requires human review."
+    },
+    {
+      "order_id": "ORD0289",
+      "evaluation_class": "FALSE_NEGATIVE / MISSED_MATCH",
+      "scenario_type": "PARTIAL_SETTLEMENT",
+      "cause": "The payment-to-settlement relationship is not a canonical one-to-one settlement chain, so the pipeline does not force a normal match.",
+      "ground_truth_chain": {
+        "order_id": "ORD0289",
+        "payment_id": "PAY0289",
+        "settlement_id": "SET0289",
+        "bank_transaction_id": "BTX0289"
+      },
+      "predicted_chain": {
+        "order_id": "ORD0289",
+        "payment_id": "PAY0289",
+        "settlement_id": "SET0289",
+        "bank_transaction_id": "BTX0289"
+      },
+      "status": "HUMAN_REVIEW",
+      "method": "NONE",
+      "confidence": 1.0,
+      "confidence_bucket": "HIGH",
+      "exception_type": "PARTIAL_SETTLEMENT",
+      "reason": "One payment is associated with multiple settlement records."
+    },
+    {
+      "order_id": "ORD0295",
+      "evaluation_class": "FALSE_POSITIVE / WRONG_MATCH",
+      "scenario_type": "UNKNOWN_REFERENCE",
+      "cause": "A plausible bank candidate may exist, but the settlement/bank reference relationship does not satisfy deterministic verification.",
+      "ground_truth_chain": {
+        "order_id": "ORD0295",
+        "payment_id": "PAY0295",
+        "settlement_id": "SET0295",
+        "bank_transaction_id": "BTX0295"
+      },
+      "predicted_chain": {
+        "order_id": "ORD0295",
+        "payment_id": "PAY0295",
+        "settlement_id": "SET0295",
+        "bank_transaction_id": null
+      },
+      "status": "HUMAN_REVIEW",
+      "method": "SIMILARITY",
+      "confidence": 0.727807,
+      "confidence_bucket": "MEDIUM",
+      "exception_type": "UNKNOWN_REFERENCE",
+      "reason": "Best bank candidate is plausible but requires manual review because the similarity score does not provide sufficient confidence for automatic matching. Deterministic verification failed: Settlement net amount does not match bank credit amount. Bank amount does not satisfy the deterministic fee calculation. Settlement reference does not match bank reference. The proposed match failed deterministic verification and therefore requires human review. Medium-confidence case routed to AI reasoning service through the safe AI validation boundary."
+    },
+    {
+      "order_id": "ORD0299",
+      "evaluation_class": "FALSE_POSITIVE / WRONG_MATCH",
+      "scenario_type": "AMBIGUOUS_MATCH",
+      "cause": "Multiple bank candidates are plausible and the score separation does not satisfy the configured ambiguity margin, so the system refuses to guess.",
+      "ground_truth_chain": {
+        "order_id": "ORD0299",
+        "payment_id": "PAY0299",
+        "settlement_id": "SET0299",
+        "bank_transaction_id": "BTX0299"
+      },
+      "predicted_chain": {
+        "order_id": "ORD0299",
+        "payment_id": "PAY0299",
+        "settlement_id": "SET0299",
+        "bank_transaction_id": null
+      },
+      "status": "HUMAN_REVIEW",
+      "method": "SIMILARITY",
+      "confidence": 0.0,
+      "confidence_bucket": "LOW",
+      "exception_type": "AMBIGUOUS_MATCH",
+      "reason": "Top two bank candidates have a score difference below the configured ambiguity margin. The system refuses to guess and requires human review. Deterministic verification failed: Settlement net amount does not match bank credit amount. Bank amount does not satisfy the deterministic fee calculation. Settlement reference does not match bank reference. The proposed match failed deterministic verification and therefore requires human review."
+    },
+    {
+      "order_id": "ORD0303",
+      "evaluation_class": "FALSE_NEGATIVE / MISSED_MATCH",
+      "scenario_type": "PARTIAL_SETTLEMENT",
+      "cause": "The payment-to-settlement relationship is not a canonical one-to-one settlement chain, so the pipeline does not force a normal match.",
+      "ground_truth_chain": {
+        "order_id": "ORD0303",
+        "payment_id": "PAY0303",
+        "settlement_id": "SET0303",
+        "bank_transaction_id": "BTX0303"
+      },
+      "predicted_chain": {
+        "order_id": "ORD0303",
+        "payment_id": "PAY0303",
+        "settlement_id": "SET0303",
+        "bank_transaction_id": "BTX0303"
+      },
+      "status": "HUMAN_REVIEW",
+      "method": "NONE",
+      "confidence": 1.0,
+      "confidence_bucket": "HIGH",
+      "exception_type": "PARTIAL_SETTLEMENT",
+      "reason": "One payment is associated with multiple settlement records."
+    },
+    {
+      "order_id": "ORD0305",
+      "evaluation_class": "FALSE_NEGATIVE / MISSED_MATCH",
+      "scenario_type": "COMBINED_SETTLEMENT",
+      "cause": "Multiple payments are represented by a combined settlement/bank relationship that cannot be represented by the canonical one-to-one chain.",
+      "ground_truth_chain": {
+        "order_id": "ORD0305",
+        "payment_id": "PAY0305",
+        "settlement_id": "SET0305",
+        "bank_transaction_id": "BTX0305"
+      },
+      "predicted_chain": {
+        "order_id": "ORD0305",
+        "payment_id": "PAY0305",
+        "settlement_id": "SET0305",
+        "bank_transaction_id": "BTX0305_COMBINED"
+      },
+      "status": "HUMAN_REVIEW",
+      "method": "NONE",
+      "confidence": 1.0,
+      "confidence_bucket": "HIGH",
+      "exception_type": "COMBINED_SETTLEMENT",
+      "reason": "Multiple payments are represented by a single combined bank credit."
+    },
+    {
+      "order_id": "ORD0307",
+      "evaluation_class": "FALSE_NEGATIVE / MISSED_MATCH",
+      "scenario_type": "PARTIAL_SETTLEMENT",
+      "cause": "The payment-to-settlement relationship is not a canonical one-to-one settlement chain, so the pipeline does not force a normal match.",
+      "ground_truth_chain": {
+        "order_id": "ORD0307",
+        "payment_id": "PAY0307",
+        "settlement_id": "SET0307",
+        "bank_transaction_id": "BTX0307"
+      },
+      "predicted_chain": {
+        "order_id": "ORD0307",
+        "payment_id": "PAY0307",
+        "settlement_id": "SET0307",
+        "bank_transaction_id": "BTX0307"
+      },
+      "status": "HUMAN_REVIEW",
+      "method": "NONE",
+      "confidence": 1.0,
+      "confidence_bucket": "HIGH",
+      "exception_type": "PARTIAL_SETTLEMENT",
+      "reason": "One payment is associated with multiple settlement records."
+    },
+    {
+      "order_id": "ORD0309",
+      "evaluation_class": "FALSE_POSITIVE / WRONG_MATCH",
+      "scenario_type": "AMBIGUOUS_MATCH",
+      "cause": "Multiple bank candidates are plausible and the score separation does not satisfy the configured ambiguity margin, so the system refuses to guess.",
+      "ground_truth_chain": {
+        "order_id": "ORD0309",
+        "payment_id": "PAY0309",
+        "settlement_id": "SET0309",
+        "bank_transaction_id": "BTX0309"
+      },
+      "predicted_chain": {
+        "order_id": "ORD0309",
+        "payment_id": "PAY0309",
+        "settlement_id": "SET0309",
+        "bank_transaction_id": null
+      },
+      "status": "HUMAN_REVIEW",
+      "method": "SIMILARITY",
+      "confidence": 0.0,
+      "confidence_bucket": "LOW",
+      "exception_type": "AMBIGUOUS_MATCH",
+      "reason": "Top two bank candidates have a score difference below the configured ambiguity margin. The system refuses to guess and requires human review. Deterministic verification failed: Settlement net amount does not match bank credit amount. Bank amount does not satisfy the deterministic fee calculation. Settlement reference does not match bank reference. The proposed match failed deterministic verification and therefore requires human review."
+    },
+    {
+      "order_id": "ORD0312",
+      "evaluation_class": "FALSE_NEGATIVE / MISSED_MATCH",
+      "scenario_type": "COMBINED_SETTLEMENT",
+      "cause": "Multiple payments are represented by a combined settlement/bank relationship that cannot be represented by the canonical one-to-one chain.",
+      "ground_truth_chain": {
+        "order_id": "ORD0312",
+        "payment_id": "PAY0312",
+        "settlement_id": "SET0312",
+        "bank_transaction_id": "BTX0312"
+      },
+      "predicted_chain": {
+        "order_id": "ORD0312",
+        "payment_id": "PAY0312",
+        "settlement_id": "SET0312",
+        "bank_transaction_id": "BTX0305_COMBINED"
+      },
+      "status": "HUMAN_REVIEW",
+      "method": "NONE",
+      "confidence": 1.0,
+      "confidence_bucket": "HIGH",
+      "exception_type": "COMBINED_SETTLEMENT",
+      "reason": "Multiple payments are represented by a single combined bank credit."
+    },
+    {
+      "order_id": "ORD0331",
+      "evaluation_class": "FALSE_NEGATIVE / MISSED_MATCH",
+      "scenario_type": "PARTIAL_SETTLEMENT",
+      "cause": "The payment-to-settlement relationship is not a canonical one-to-one settlement chain, so the pipeline does not force a normal match.",
+      "ground_truth_chain": {
+        "order_id": "ORD0331",
+        "payment_id": "PAY0331",
+        "settlement_id": "SET0331",
+        "bank_transaction_id": "BTX0331"
+      },
+      "predicted_chain": {
+        "order_id": "ORD0331",
+        "payment_id": "PAY0331",
+        "settlement_id": "SET0331",
+        "bank_transaction_id": "BTX0331"
+      },
+      "status": "HUMAN_REVIEW",
+      "method": "NONE",
+      "confidence": 1.0,
+      "confidence_bucket": "HIGH",
+      "exception_type": "PARTIAL_SETTLEMENT",
+      "reason": "One payment is associated with multiple settlement records."
+    },
+    {
+      "order_id": "ORD0339",
+      "evaluation_class": "FALSE_POSITIVE / WRONG_MATCH",
+      "scenario_type": "UNKNOWN_REFERENCE",
+      "cause": "A plausible bank candidate may exist, but the settlement/bank reference relationship does not satisfy deterministic verification.",
+      "ground_truth_chain": {
+        "order_id": "ORD0339",
+        "payment_id": "PAY0339",
+        "settlement_id": "SET0339",
+        "bank_transaction_id": "BTX0339"
+      },
+      "predicted_chain": {
+        "order_id": "ORD0339",
+        "payment_id": "PAY0339",
+        "settlement_id": "SET0339",
+        "bank_transaction_id": null
+      },
+      "status": "HUMAN_REVIEW",
+      "method": "SIMILARITY",
+      "confidence": 0.705295,
+      "confidence_bucket": "MEDIUM",
+      "exception_type": "UNKNOWN_REFERENCE",
+      "reason": "Best bank candidate is plausible but requires manual review because the similarity score does not provide sufficient confidence for automatic matching. Deterministic verification failed: Settlement net amount does not match bank credit amount. Bank amount does not satisfy the deterministic fee calculation. Settlement reference does not match bank reference. The proposed match failed deterministic verification and therefore requires human review. Medium-confidence case routed to AI reasoning service through the safe AI validation boundary."
+    },
+    {
+      "order_id": "ORD0346",
+      "evaluation_class": "FALSE_POSITIVE / WRONG_MATCH",
+      "scenario_type": "AMBIGUOUS_MATCH",
+      "cause": "Multiple bank candidates are plausible and the score separation does not satisfy the configured ambiguity margin, so the system refuses to guess.",
+      "ground_truth_chain": {
+        "order_id": "ORD0346",
+        "payment_id": "PAY0346",
+        "settlement_id": "SET0346",
+        "bank_transaction_id": "BTX0346"
+      },
+      "predicted_chain": {
+        "order_id": "ORD0346",
+        "payment_id": "PAY0346",
+        "settlement_id": "SET0346",
+        "bank_transaction_id": null
+      },
+      "status": "HUMAN_REVIEW",
+      "method": "SIMILARITY",
+      "confidence": 0.0,
+      "confidence_bucket": "LOW",
+      "exception_type": "AMBIGUOUS_MATCH",
+      "reason": "Top two bank candidates have a score difference below the configured ambiguity margin. The system refuses to guess and requires human review. Deterministic verification failed: Settlement net amount does not match bank credit amount. Bank amount does not satisfy the deterministic fee calculation. Settlement reference does not match bank reference. The proposed match failed deterministic verification and therefore requires human review."
+    },
+    {
+      "order_id": "ORD0348",
+      "evaluation_class": "FALSE_POSITIVE / WRONG_MATCH",
+      "scenario_type": "UNKNOWN_REFERENCE",
+      "cause": "A plausible bank candidate may exist, but the settlement/bank reference relationship does not satisfy deterministic verification.",
+      "ground_truth_chain": {
+        "order_id": "ORD0348",
+        "payment_id": "PAY0348",
+        "settlement_id": "SET0348",
+        "bank_transaction_id": "BTX0348"
+      },
+      "predicted_chain": {
+        "order_id": "ORD0348",
+        "payment_id": "PAY0348",
+        "settlement_id": "SET0348",
+        "bank_transaction_id": null
+      },
+      "status": "HUMAN_REVIEW",
+      "method": "SIMILARITY",
+      "confidence": 0.788095,
+      "confidence_bucket": "MEDIUM",
+      "exception_type": "UNKNOWN_REFERENCE",
+      "reason": "Best bank candidate is plausible but requires manual review because the similarity score does not provide sufficient confidence for automatic matching. Deterministic verification failed: Settlement reference does not match bank reference. The proposed match failed deterministic verification and therefore requires human review. Medium-confidence case routed to AI reasoning service through the safe AI validation boundary."
+    }
+  ]
+}
