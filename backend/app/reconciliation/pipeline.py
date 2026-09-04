@@ -8,6 +8,7 @@ from backend.app.reconciliation.relationship_builder import (
 from backend.app.reconciliation.decision_engine import (
     MatchDecision,
     decide_chain,
+    _finalize_decision,
 )
 
 
@@ -63,6 +64,8 @@ def reconcile_all(
                 "and no bank candidates were supplied."
             )
 
+        # Session 10 canonical terminal-status gate.
+        decision = _finalize_decision(decision)
         decisions.append(decision)
 
     return decisions

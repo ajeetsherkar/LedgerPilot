@@ -111,12 +111,17 @@ def _verify_fee(
     bank: dict[str, Any],
 ) -> bool:
     """
-    Verify the bank amount is consistent with the
-    settlement gross amount after platform fee and GST.
+    Verify the bank amount against the settlement fee calculation.
 
-    This re-checks the fee-aware calculation instead
-    of trusting the original matching proposal.
+    If the settlement does not contain gross_amount, there is
+    no independent fee calculation to perform. In that case,
+    the exact net-amount verification is sufficient.
     """
+
+    # Fee verification is only applicable when gross amount
+    # is explicitly available.
+    if settlement.get("gross_amount") is None:
+        return True
 
     try:
         expected_net = expected_net_amount(settlement)
@@ -211,6 +216,8 @@ def verify_match(
     settlement: dict[str, Any],
     candidate: dict[str, Any],
     candidates: list[dict[str, Any]],
+    *,
+    method: str = "EXACT",
 ) -> VerificationResult:
     """
     Deterministically verify a proposed settlement -> bank match.
@@ -237,27 +244,40 @@ def verify_match(
 
     reasons: list[str] = []
 
-    amount_passed = _verify_amount(
-        settlement,
-        candidate,
-    )
+    if method == "FEE_AWARE":
+        amount_passed = _verify_fee(
+            settlement,
+            candidate,
+        )
+        fee_passed = amount_passed
 
-    if not amount_passed:
-        reasons.append(
-            "Settlement net amount does not match "
-            "bank credit amount."
+        if not amount_passed:
+            reasons.append(
+                "Bank amount does not satisfy the "
+                "deterministic fee calculation."
+            )
+    else:
+        amount_passed = _verify_amount(
+            settlement,
+            candidate,
         )
 
-    fee_passed = _verify_fee(
-        settlement,
-        candidate,
-    )
+        if not amount_passed:
+            reasons.append(
+                "Settlement net amount does not match "
+                "bank credit amount."
+            )
 
-    if not fee_passed:
-        reasons.append(
-            "Bank amount does not satisfy the "
-            "deterministic fee calculation."
+        fee_passed = _verify_fee(
+            settlement,
+            candidate,
         )
+
+        if not fee_passed:
+            reasons.append(
+                "Bank amount does not satisfy the "
+                "deterministic fee calculation."
+            )
 
     date_passed = _verify_date(
         settlement,

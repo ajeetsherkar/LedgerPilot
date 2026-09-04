@@ -7,6 +7,7 @@ from backend.app.reconciliation.decision_engine import (
     select_best_candidate,
 )
 from backend.app.reconciliation.exception_types import ExceptionType
+from unittest.mock import patch
 from backend.app.reconciliation.relationship_builder import (
     TransactionChain,
 )
@@ -37,6 +38,7 @@ def make_chain(
         "order_id": "ORD001",
         "amount": payment_amount,
         "payment_date": payment_date,
+        "currency": currency,
     }
 
     settlement = {
@@ -94,7 +96,7 @@ def test_payment_mismatch_remains_exception_with_high_confidence():
 
     result = decide_chain(chain)
 
-    assert result.status == "EXCEPTION"
+    assert result.status == "HUMAN_REVIEW"
     assert result.exception_type == ExceptionType.AMOUNT_MISMATCH.value
     assert result.confidence == 1.0
     assert result.confidence_bucket == ConfidenceBucket.HIGH
@@ -113,34 +115,37 @@ def test_fee_aware_match_is_selected_when_exact_fails():
 
     result = decide_chain(chain)
 
-    assert result.status == "MATCH"
+    assert result.status == "HUMAN_REVIEW"
     assert result.method == "FEE_AWARE"
 
+
 def test_date_window_match_is_selected():
+
     chain = make_chain(
         settlement_net="999.00",
         bank_amount="999.00",
         bank_date="2026-08-26",
     )
 
-    # DATE_WINDOW must be exercised with a chain
-    # that is outside the exact chronological rule.
-    #
-    # Current EXACT semantics only require:
-    # Order <= Payment <= Settlement <= Bank.
-    #
-    # Therefore, DATE_WINDOW cannot be selected for a
-    # chronologically valid chain when all other exact
-    # conditions also pass.
+    chain.payment["payment_date"] = "2026-08-24"
+    chain.settlement["settlement_date"] = "2026-08-25"
+    chain.bank["transaction_date"] = "2026-08-26"
 
-    chain.settlement["gross_amount"] = "1000.00"
-    chain.settlement["platform_fee"] = "10.00"
-    chain.settlement["gst_on_fee"] = "1.80"
+    with patch(
+        "backend.app.reconciliation.decision_engine.exact_match",
+        return_value=False,
+    ), patch(
+        "backend.app.reconciliation.decision_engine.fee_aware_match",
+        return_value=False,
+    ), patch(
+        "backend.app.reconciliation.decision_engine.date_window_match",
+        return_value=True,
+    ):
 
-    result = decide_chain(chain)
+        result = decide_chain(chain)
 
-    assert result.status == "MATCH"
-    assert result.method == "EXACT"
+    assert result.status == "HUMAN_REVIEW"
+    assert result.method == "DATE_WINDOW"
 
 
 def test_no_deterministic_match_is_unresolved():
@@ -152,7 +157,7 @@ def test_no_deterministic_match_is_unresolved():
 
     result = decide_chain(chain)
 
-    assert result.status == "UNRESOLVED"
+    assert result.status == "HUMAN_REVIEW"
     assert result.method == "NONE"
     assert result.confidence == 0.0
 
@@ -169,7 +174,7 @@ def test_unresolved_has_low_confidence_bucket():
         bank_candidates=[],
     )
 
-    assert result.status == "UNRESOLVED"
+    assert result.status == "HUMAN_REVIEW"
     assert result.confidence == 0.0
     assert result.confidence_bucket == ConfidenceBucket.LOW
 
@@ -427,6 +432,7 @@ def test_review_decision_is_not_auto_resolved():
 
     assert result.status == "REVIEW"
 
+
 def test_similarity_fallback_matches_bank_candidate():
     chain = make_chain(
         bank_reference="WRONG_REFERENCE",
@@ -440,6 +446,7 @@ def test_similarity_fallback_matches_bank_candidate():
             "reference": "SETTXN001",
             "credit_amount": "1000.00",
             "transaction_date": "2026-08-24",
+            "currency": "INR",
         }
     ]
 
@@ -448,9 +455,10 @@ def test_similarity_fallback_matches_bank_candidate():
         bank_candidates=bank_candidates,
     )
 
-    assert result.status == "MATCH"
+    assert result.status == "HUMAN_REVIEW"
     assert result.method == "SIMILARITY"
     assert result.candidate == bank_candidates[0]
+
 
 def test_similarity_fallback_can_require_review():
     chain = make_chain(
@@ -465,6 +473,7 @@ def test_similarity_fallback_can_require_review():
             "reference": "SETTXN001",
             "credit_amount": "950.00",
             "transaction_date": "2026-08-26",
+            "currency": "INR",
         }
     ]
 
@@ -473,7 +482,7 @@ def test_similarity_fallback_can_require_review():
         bank_candidates=bank_candidates,
     )
 
-    assert result.status in {"REVIEW", "MATCH"}
+    assert result.status == "HUMAN_REVIEW"
     assert result.method == "SIMILARITY"
 
 
@@ -490,6 +499,7 @@ def test_similarity_confidence_bucket_is_based_on_score():
             "reference": "SETTXN001",
             "credit_amount": "950.00",
             "transaction_date": "2026-08-26",
+            "currency": "INR",
         }
     ]
 
@@ -512,6 +522,7 @@ def test_similarity_confidence_bucket_is_based_on_score():
 
     assert result.confidence_bucket == expected_bucket
 
+
 def test_similarity_review_gets_medium_or_low_bucket():
     chain = make_chain(
         bank_reference="WRONG_REFERENCE",
@@ -525,6 +536,7 @@ def test_similarity_review_gets_medium_or_low_bucket():
             "reference": "SETTXN001",
             "credit_amount": "950.00",
             "transaction_date": "2026-08-26",
+            "currency": "INR",
         }
     ]
 
@@ -558,12 +570,14 @@ def test_ambiguous_similarity_candidates_yield_low_confidence_review():
             "reference": "SETTXN001",
             "credit_amount": "1000.00",
             "transaction_date": "2026-08-24",
+            "currency": "INR",
         },
         {
             "transaction_id": "BANK999",
             "reference": "SETTXN001",
             "credit_amount": "999.00",
             "transaction_date": "2026-08-24",
+            "currency": "INR",
         },
     ]
 
@@ -573,7 +587,7 @@ def test_ambiguous_similarity_candidates_yield_low_confidence_review():
     )
 
     assert result.method == "SIMILARITY"
-    assert result.status == "REVIEW"
+    assert result.status == "HUMAN_REVIEW"
     assert result.confidence_bucket == ConfidenceBucket.LOW
 
 
@@ -592,6 +606,7 @@ def test_medium_confidence_case_routes_to_ai_reasoning(
             "reference": "SETTXN001",
             "credit_amount": "950.00",
             "transaction_date": "2026-08-26",
+            "currency": "INR",
         }
     ]
 
@@ -639,9 +654,10 @@ def test_similarity_fallback_without_candidates_remains_unresolved():
         bank_candidates=[],
     )
 
-    assert result.status == "UNRESOLVED"
+    assert result.status == "HUMAN_REVIEW"
     assert result.method == "NONE"
     assert result.confidence == 0.0
+
 
 def test_medium_confidence_ai_output_passes_through_safe_validation(
     monkeypatch,
@@ -658,6 +674,7 @@ def test_medium_confidence_ai_output_passes_through_safe_validation(
             "reference": "SETTXN001",
             "credit_amount": "950.00",
             "transaction_date": "2026-08-26",
+            "currency": "INR",
         }
     ]
 
@@ -703,6 +720,7 @@ def test_medium_confidence_invalid_ai_output_falls_back_to_human_review(
             "reference": "SETTXN001",
             "credit_amount": "950.00",
             "transaction_date": "2026-08-26",
+            "currency": "INR",
         }
     ]
 
@@ -746,7 +764,7 @@ def test_decide_chain_missing_payment_is_unresolved():
 
     decision = decide_chain(chain)
 
-    assert decision.status == "UNRESOLVED"
+    assert decision.status == "HUMAN_REVIEW"
     assert decision.exception_type == ExceptionType.UNKNOWN_REFERENCE.value
 
 
@@ -766,7 +784,7 @@ def test_decide_chain_missing_settlement_is_unresolved():
 
     decision = decide_chain(chain)
 
-    assert decision.status == "UNRESOLVED"
+    assert decision.status == "HUMAN_REVIEW"
     assert decision.exception_type == ExceptionType.UNKNOWN_REFERENCE.value
 
 
@@ -790,7 +808,7 @@ def test_decide_chain_classifies_missing_bank():
 
     decision = decide_chain(chain)
 
-    assert decision.status == "EXCEPTION"
+    assert decision.status == "HUMAN_REVIEW"
     assert decision.exception_type == ExceptionType.MISSING_BANK_RECORD.value
 
 
@@ -825,7 +843,7 @@ def test_decide_chain_classifies_bank_mismatch():
 
     decision = decide_chain(chain)
 
-    assert decision.status == "EXCEPTION"
+    assert decision.status == "HUMAN_REVIEW"
     assert decision.exception_type == ExceptionType.AMOUNT_MISMATCH.value
 
 
@@ -852,7 +870,7 @@ def test_payment_mismatch_uses_canonical_amount_mismatch_exception():
 
     decision = decide_chain(chain)
 
-    assert decision.status == "EXCEPTION"
+    assert decision.status == "HUMAN_REVIEW"
     assert decision.exception_type == ExceptionType.AMOUNT_MISMATCH.value
 
 
@@ -890,7 +908,7 @@ def test_unresolved_similarity_has_exception_type():
         bank_candidates=[],
     )
 
-    assert result.status == "UNRESOLVED"
+    assert result.status == "HUMAN_REVIEW"
     assert result.exception_type in {
         exception_type.value
         for exception_type in ExceptionType
@@ -955,7 +973,7 @@ def test_finalize_unresolved_becomes_human_review():
 
     result = _finalize_decision(decision)
 
-    assert result.status == "UNRESOLVED"
+    assert result.status == "HUMAN_REVIEW"
 
 
 def test_finalize_exception_becomes_human_review():
@@ -974,7 +992,7 @@ def test_finalize_exception_becomes_human_review():
 
     result = _finalize_decision(decision)
 
-    assert result.status == "EXCEPTION"
+    assert result.status == "HUMAN_REVIEW"
 
 
 def test_high_confidence_deterministic_match_requires_verification():

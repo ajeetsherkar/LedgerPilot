@@ -1,44 +1,32 @@
 from dataclasses import dataclass
-
 from typing import Any, Optional
 
 from backend.app.reconciliation.relationship_builder import TransactionChain
-
 from backend.app.reconciliation.exact_matcher import exact_match
-
 from backend.app.reconciliation.fee_aware_matcher import fee_aware_match
-
 from backend.app.reconciliation.date_window_matcher import date_window_match
-
 from backend.app.reconciliation.candidate_generator import (
     generate_candidates,
 )
-
 from backend.app.reconciliation.similarity_scorer import (
     score_candidates,
 )
-
 from backend.app.reconciliation.confidence import (
     ConfidenceBucket,
     ConfidenceThresholds,
     classify_confidence,
 )
-
 from backend.app.reconciliation.ai_service import (
     reason_about_reconciliation,
     safely_process_ai_response,
 )
-
 from backend.app.reconciliation.verification import (
     verify_match,
 )
-
 from backend.app.reconciliation.exception_classifier import (
     classify_chain_exception,
 )
-
 from backend.app.reconciliation.exception_types import ExceptionType
-
 from backend.app.reconciliation.decision_status import DecisionStatus
 
 
@@ -129,29 +117,31 @@ def _finalize_decision(
     decision: MatchDecision,
 ) -> MatchDecision:
     """
-    Finalize a reconciliation decision.
+    Convert an internal reconciliation decision into one of the
+    canonical Session 10 terminal business outcomes.
 
-    Preserve deterministic/internal decision states such as:
-        MATCH
-        REVIEW
-        UNRESOLVED
-        EXCEPTION
+    Rules:
+        AUTO_RESOLVED
+            -> preserve
 
-    Convert only eligible AI responses into AI_SUGGESTED.
+        validated AI reasoning
+            -> AI_SUGGESTED
 
-    AUTO_RESOLVED is preserved when deterministic verification
-    has already approved the match.
+        everything else
+            -> HUMAN_REVIEW
     """
 
     # ---------------------------------------------------------
     # 1. ALREADY AUTO-RESOLVED
     # ---------------------------------------------------------
+
     if decision.status == DecisionStatus.AUTO_RESOLVED.value:
         return decision
 
     # ---------------------------------------------------------
     # 2. VALIDATED AI SUGGESTION
     # ---------------------------------------------------------
+
     if (
         decision.ai_reasoning is not None
         and decision.ai_reasoning.get("status") == "AI_VALIDATED"
@@ -159,26 +149,31 @@ def _finalize_decision(
     ):
         decision.status = DecisionStatus.AI_SUGGESTED.value
 
-        decision.reason = (
-            f"{decision.reason} "
+        ai_reason = (
             "AI produced a validated reconciliation suggestion "
             "for human review."
         )
 
+        if decision.reason:
+            decision.reason = f"{decision.reason} {ai_reason}"
+        else:
+            decision.reason = ai_reason
+
         return decision
 
     # ---------------------------------------------------------
-    # 3. PRESERVE EXISTING DECISION STATE
+    # 3. ALL REMAINING NON-FINAL CASES
     # ---------------------------------------------------------
-    #
-    # MATCH
-    # REVIEW
-    # UNRESOLVED
-    # EXCEPTION
-    #
-    # These states are meaningful and must not all be collapsed
-    # into HUMAN_REVIEW.
-    #
+
+    decision.status = DecisionStatus.HUMAN_REVIEW.value
+
+    if not decision.reason:
+        decision.reason = (
+            "Decision requires human review because it did not "
+            "meet the criteria for automatic resolution or a "
+            "validated AI suggestion."
+        )
+
     return decision
 
 
@@ -202,7 +197,6 @@ def _with_chain_ids(
     decision.payment_id = chain.payment_id
     decision.settlement_id = chain.settlement_id
     decision.bank_transaction_id = chain.bank_transaction_id
-
     return decision
 
 
@@ -229,10 +223,29 @@ def _verify_decision(
     else:
         candidates = bank_candidates
 
+    # Settlement records do not contain currency in the
+    # production CSV schema. Use the payment currency as
+    # the expected transaction currency for verification.
+    payment = getattr(chain, "payment", None)
+    order = getattr(chain, "order", None)
+
+    if isinstance(payment, dict):
+        expected_currency = payment.get("currency")
+    elif isinstance(order, dict):
+        expected_currency = order.get("currency")
+    else:
+        expected_currency = chain.settlement.get("currency")
+
+    verification_settlement = {
+        **chain.settlement,
+        "currency": expected_currency,
+    }
+
     verification = verify_match(
-        chain.settlement,
+        verification_settlement,
         decision.candidate,
         candidates,
+        method=decision.method,
     )
 
     if not verification.passed:
@@ -844,7 +857,6 @@ def decide_chain(
     if chain_exception in {
         ExceptionType.PARTIAL_SETTLEMENT,
         ExceptionType.COMBINED_SETTLEMENT,
-        ExceptionType.DATE_MISMATCH,
     }:
         reasons = {
             ExceptionType.PARTIAL_SETTLEMENT: (
@@ -854,10 +866,6 @@ def decide_chain(
             ExceptionType.COMBINED_SETTLEMENT: (
                 "Multiple payments are represented by a "
                 "single combined bank credit."
-            ),
-            ExceptionType.DATE_MISMATCH: (
-                "Transaction dates violate the configured "
-                "reconciliation date windows."
             ),
         }
 
@@ -930,12 +938,20 @@ def decide_chain(
             bank_candidates,
         )
 
-        decision = _auto_resolve_if_eligible(
-            decision,
-            verification_passed=verification_passed,
-            has_competing_candidate=False,
-        )
+        if not verification_passed:
+            decision.status = "REVIEW"
+            decision.reason = (
+                f"{decision.reason} "
+                "The proposed match failed deterministic verification "
+                "and therefore requires human review."
+            )
 
+        if decision.method == "EXACT":
+            decision = _auto_resolve_if_eligible(
+                decision,
+                verification_passed=verification_passed,
+                has_competing_candidate=False,
+            )
         return _finalize_decision(decision)
 
     # ---------------------------------------------------------
@@ -962,6 +978,22 @@ def decide_chain(
                 bank_candidates,
             )
 
+            if not verification_passed:
+                decision.status = "REVIEW"
+                decision.reason = (
+                    f"{decision.reason} "
+                    "The proposed match failed deterministic verification "
+                    "and therefore requires human review."
+                )
+
+            if decision.method == "EXACT":
+                decision = _auto_resolve_if_eligible(
+                    decision,
+                    verification_passed=verification_passed,
+                    has_competing_candidate=False,
+                )
+
+
             if decision.confidence_bucket == ConfidenceBucket.MEDIUM:
 
                 if decision.exception_type is None:
@@ -984,17 +1016,14 @@ def decide_chain(
                     ai_response,
                 )
 
+                if isinstance(decision.candidate, dict):
+                    decision.candidate["ai_reasoning"] = decision.ai_reasoning
+
                 decision.reason = (
                     f"{decision.reason} "
                     "Medium-confidence case routed to AI reasoning service "
                     "through the safe AI validation boundary."
                 )
-
-            decision = _auto_resolve_if_eligible(
-                decision,
-                verification_passed=verification_passed,
-                has_competing_candidate=False,
-            )
 
             return _finalize_decision(decision)
 

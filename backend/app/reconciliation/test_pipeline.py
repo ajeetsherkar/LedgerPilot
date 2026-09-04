@@ -1,5 +1,6 @@
 from backend.app.reconciliation.pipeline import reconcile_all
 
+
 def make_order(
     order_id="ORD001",
     amount=1000.0,
@@ -56,6 +57,7 @@ def make_bank(
         "transaction_date": "2026-01-01",
         "reference": reference,
     }
+
 
 def test_reconcile_all_returns_one_decision_per_order():
     orders = [
@@ -136,7 +138,7 @@ def test_complete_exact_chain_is_matched():
 
     decision = decisions[0]
 
-    assert decision.status == "MATCH"
+    assert decision.status == "AUTO_RESOLVED"
     assert decision.method == "EXACT"
     assert decision.confidence == 1.0
 
@@ -163,7 +165,7 @@ def test_missing_payment_becomes_unresolved():
 
     decision = decisions[0]
 
-    assert decision.status == "UNRESOLVED"
+    assert decision.status == "HUMAN_REVIEW"
     assert decision.method == "NONE"
 
 
@@ -193,10 +195,8 @@ def test_missing_bank_does_not_crash_pipeline():
 
     decision = decisions[0]
 
-    assert decision.status in {
-        "UNRESOLVED",
-        "REVIEW",
-    }
+    assert decision.status == "HUMAN_REVIEW"
+
 
 def test_similarity_fallback_matches_correct_bank_candidate():
     from backend.app.reconciliation.relationship_builder import (
@@ -228,7 +228,7 @@ def test_similarity_fallback_matches_correct_bank_candidate():
 
     assert len(decisions) == 20
     assert all(
-        decision.status == "MATCH"
+        decision.status == "HUMAN_REVIEW"
         for decision in decisions
     )
     assert all(
@@ -285,6 +285,6 @@ def test_unrelated_bank_candidates_do_not_auto_match():
     )
 
     assert all(
-        decision.status == "UNRESOLVED"
+        decision.status == "HUMAN_REVIEW"
         for decision in decisions
     )

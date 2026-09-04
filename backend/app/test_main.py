@@ -74,22 +74,22 @@ def test_upload_and_reconciliation():
     assert data["batch_id"] == batch_id
     assert data["total"] == 10
     assert data["matched"] == 9
-    assert data["review"] == 0
+    assert data["review"] == 1
     assert data["unresolved"] == 0
-    assert data["exceptions"] == 1
+    assert data["exceptions"] == 0
 
     results = data["results"]
 
     assert len(results) == 10
 
     # ---------------------------------------------------------
-    # EXCEPTION RESULT
+    # HUMAN REVIEW RESULT
     # ---------------------------------------------------------
 
     exception = next(
         result
         for result in results
-        if result["status"] == "EXCEPTION"
+        if result["status"] == "HUMAN_REVIEW"
     )
 
     assert exception["order_id"] == "ORD0001"
@@ -111,7 +111,7 @@ def test_upload_and_reconciliation():
     matched_results = [
         result
         for result in results
-        if result["status"] == "MATCH"
+        if result["status"] == "AUTO_RESOLVED"
     ]
 
     assert len(matched_results) == 9

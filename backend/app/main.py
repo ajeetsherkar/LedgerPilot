@@ -123,21 +123,15 @@ def reconciliation(batch_id: str):
         "batch_id": batch_id,
         "total": len(results),
         "matched": sum(
-            result.status == "MATCH"
+            result.status == "AUTO_RESOLVED"
             for result in results
         ),
         "review": sum(
-            result.status == "REVIEW"
+            result.status == "HUMAN_REVIEW"
             for result in results
         ),
-        "unresolved": sum(
-            result.status == "UNRESOLVED"
-            for result in results
-        ),
-        "exceptions": sum(
-            result.status == "EXCEPTION"
-            for result in results
-        ),
+        "unresolved": 0,
+        "exceptions": 0,
         "results": response_results,
     }
 
