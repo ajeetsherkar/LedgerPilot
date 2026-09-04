@@ -12,3 +12,4 @@ python-multipart
 rapidfuzz
 
 psycopg[binary]==3.3.5
+streamlit==1.63.0
