@@ -391,7 +391,116 @@ def dashboard_screen():
 
 def exceptions_screen():
     st.title("Exceptions")
-    st.write("Reconciliation exceptions will appear here.")
+    st.write("Review reconciliation exceptions and their categories.")
+
+    canonical_exception_types = [
+        "MISSING_BANK_RECORD",
+        "AMOUNT_MISMATCH",
+        "DUPLICATE_BANK_TRANSACTION",
+        "UNKNOWN_REFERENCE",
+        "AMBIGUOUS_MATCH",
+        "PARTIAL_SETTLEMENT",
+        "COMBINED_SETTLEMENT",
+        "DATE_MISMATCH",
+        "MISSING_PAYMENT",
+        "MISSING_SETTLEMENT",
+    ]
+
+    try:
+        response = requests.get(
+            f"{API_BASE_URL}/exceptions",
+            timeout=10,
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except requests.Timeout:
+        st.error("The backend timed out while loading exceptions.")
+        return
+    except requests.ConnectionError:
+        st.error(
+            "Could not connect to the LedgerPilot backend. "
+            "Make sure FastAPI is running."
+        )
+        return
+    except requests.RequestException as exc:
+        st.error(f"Failed to load exceptions: {exc}")
+        return
+    except ValueError:
+        st.error("The backend returned an invalid exceptions response.")
+        return
+
+    if not isinstance(payload, dict):
+        st.error("Invalid exceptions response from backend.")
+        return
+
+    exceptions = payload.get("exceptions", [])
+
+    if not isinstance(exceptions, list):
+        st.error("Invalid exceptions data returned by backend.")
+        return
+
+    st.metric("Total exceptions", len(exceptions))
+
+    available_types = {
+        str(item.get("exception_type"))
+        for item in exceptions
+        if isinstance(item, dict) and item.get("exception_type")
+    }
+
+    filter_options = [
+        exception_type
+        for exception_type in canonical_exception_types
+        if exception_type in available_types
+    ]
+
+    category_options = ["All categories"] + filter_options
+
+    selected_category = st.selectbox(
+        "Exception Category",
+        category_options,
+    )
+
+    filtered_exceptions = exceptions
+
+    if selected_category != "All categories":
+        filtered_exceptions = [
+            item
+            for item in exceptions
+            if isinstance(item, dict)
+            and item.get("exception_type") == selected_category
+        ]
+
+    if not filtered_exceptions:
+        st.info("No exceptions match the selected category.")
+        return
+
+    table_rows = []
+
+    for item in filtered_exceptions:
+        amount = item.get("amount")
+
+        if amount is None:
+            display_amount = "—"
+        else:
+            try:
+                display_amount = f"{float(amount):,.2f}"
+            except (TypeError, ValueError):
+                display_amount = str(amount)
+
+        table_rows.append(
+            {
+                "ID": item.get("exception_id", "—"),
+                "Type": item.get("exception_type", "—"),
+                "Amount": display_amount,
+                "Status": item.get("status", "—"),
+            }
+        )
+
+    st.dataframe(
+        table_rows,
+        use_container_width=True,
+        hide_index=True,
+    )
 
 
 def transaction_detail_screen():

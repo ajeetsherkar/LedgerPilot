@@ -267,15 +267,20 @@ def get_exceptions():
             cursor.execute(
                 """
                 SELECT
-                    exception_id,
-                    result_id,
-                    batch_id,
-                    exception_type,
-                    status,
-                    reason,
-                    created_at
-                FROM exceptions
-                ORDER BY created_at DESC, exception_id DESC
+                    e.exception_id,
+                    e.result_id,
+                    e.batch_id,
+                    e.exception_type,
+                    e.status,
+                    e.reason,
+                    e.created_at,
+                    o.order_amount::double precision AS amount
+                FROM exceptions AS e
+                LEFT JOIN reconciliation_results AS r
+                    ON e.result_id = r.result_id
+                LEFT JOIN orders AS o
+                    ON r.order_id = o.order_id
+                ORDER BY e.created_at DESC, e.exception_id DESC
                 """
             )
             exceptions = [dict(row) for row in cursor.fetchall()]
