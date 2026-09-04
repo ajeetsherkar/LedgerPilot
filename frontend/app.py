@@ -220,7 +220,92 @@ def upload_screen():
 
 def dashboard_screen():
     st.title("Dashboard")
-    st.write("Reconciliation summary and evaluation metrics will appear here.")
+    st.write("Live reconciliation summary from the backend.")
+
+    try:
+        response = requests.get(
+            f"{API_BASE_URL}/results",
+            timeout=30,
+        )
+        response.raise_for_status()
+    except requests.exceptions.Timeout:
+        st.error("The results request timed out. Please try again.")
+        return
+    except requests.exceptions.ConnectionError:
+        st.error(
+            f"Could not connect to the LedgerPilot API at {API_BASE_URL}."
+        )
+        return
+    except requests.exceptions.RequestException as exc:
+        st.error(f"Could not load reconciliation results: {exc}")
+        return
+
+    try:
+        payload = response.json()
+    except ValueError:
+        st.error("The results API returned an invalid response.")
+        return
+
+    # The backend normally returns the reconciliation records as a list.
+    # Also support common wrapped response shapes without hardcoding values.
+    if isinstance(payload, list):
+        records = payload
+    elif isinstance(payload, dict):
+        records = None
+
+        for key in ("results", "data", "items"):
+            candidate = payload.get(key)
+            if isinstance(candidate, list):
+                records = candidate
+                break
+
+        if records is None:
+            records = []
+    else:
+        st.error("The results API returned an unexpected response format.")
+        return
+
+    total = len(records)
+
+    auto_resolved = 0
+    ai_suggested = 0
+    human_review = 0
+
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+
+        status = (
+            record.get("status")
+            or record.get("decision")
+            or record.get("final_status")
+            or ""
+        )
+
+        status = str(status).upper()
+
+        if status == "AUTO_RESOLVED":
+            auto_resolved += 1
+        elif status == "AI_SUGGESTED":
+            ai_suggested += 1
+        elif status == "HUMAN_REVIEW":
+            human_review += 1
+
+    st.subheader("Reconciliation Summary")
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        st.metric("Total", total)
+
+    with col2:
+        st.metric("Auto-resolved", auto_resolved)
+
+    with col3:
+        st.metric("AI-suggested", ai_suggested)
+
+    with col4:
+        st.metric("Human review", human_review)
 
 
 def exceptions_screen():
