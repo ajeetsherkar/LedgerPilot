@@ -1007,9 +1007,22 @@ def decide_chain(
                     bank_candidates,
                 )
 
-                ai_response = reason_about_reconciliation(
-                    evidence
-                )
+                try:
+                    ai_response = reason_about_reconciliation(
+                        evidence
+                    )
+                except Exception as exc:
+                    decision.status = "UNRESOLVED"
+                    decision.confidence = 0.0
+                    decision.confidence_bucket = ConfidenceBucket.LOW
+                    decision.candidate = None
+                    decision.ai_reasoning = None
+                    decision.reason = (
+                        "AI reasoning service failed during processing. "
+                        "The case was safely marked UNRESOLVED. "
+                        f"Failure: {type(exc).__name__}: {exc}"
+                    )
+                    return decision
 
                 decision.ai_reasoning = safely_process_ai_response(
                     evidence,

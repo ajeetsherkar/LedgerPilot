@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 import pandas as pd
 
 from backend.app.database import get_connection
+from backend.app.reconciliation.input_validator import validate_source_records
 
 
 EXPECTED_FILES = {
@@ -39,6 +40,15 @@ def ingest_csv_files(
 
         if dataframe.empty:
             raise ValueError(f"{source}.csv is empty")
+
+        records = dataframe.to_dict(orient="records")
+        validation_error = validate_source_records(
+            source,
+            records,
+        )
+
+        if validation_error is not None:
+            raise ValueError(validation_error)
 
         dataframes[source] = dataframe
 

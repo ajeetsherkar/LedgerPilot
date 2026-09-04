@@ -2,6 +2,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from pydantic import BaseModel
+
+import pandas as pd
 from psycopg.rows import dict_row
 
 from backend.app.database import (
@@ -61,12 +63,18 @@ def upload_csv_files(
     settlements: UploadFile = File(...),
     bank: UploadFile = File(...),
 ):
-    result = ingest_csv_files(
-        orders_file=orders,
-        payments_file=payments,
-        settlements_file=settlements,
-        bank_file=bank,
-    )
+    try:
+        result = ingest_csv_files(
+            orders_file=orders,
+            payments_file=payments,
+            settlements_file=settlements,
+            bank_file=bank,
+        )
+    except (ValueError, pd.errors.ParserError) as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid reconciliation input: {exc}",
+        ) from None
 
     return {
         "status": "success",

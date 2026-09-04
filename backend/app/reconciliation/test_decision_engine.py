@@ -751,6 +751,49 @@ def test_medium_confidence_invalid_ai_output_falls_back_to_human_review(
         assert "confidence" not in result.ai_reasoning
 
 
+def test_medium_confidence_ai_failure_degrades_to_unresolved(
+    monkeypatch,
+):
+    chain = make_chain(
+        bank_reference="WRONG_REFERENCE",
+        bank_amount="950.00",
+        bank_date="2026-08-26",
+    )
+
+    bank_candidates = [
+        {
+            "transaction_id": "BANK999",
+            "reference": "SETTXN001",
+            "credit_amount": "950.00",
+            "transaction_date": "2026-08-26",
+            "currency": "INR",
+        }
+    ]
+
+    def exploding_ai_service(evidence):
+        raise ConnectionError("Simulated unreachable AI provider")
+
+    monkeypatch.setattr(
+        "backend.app.reconciliation.decision_engine."
+        "reason_about_reconciliation",
+        exploding_ai_service,
+    )
+
+    result = decide_chain(
+        chain,
+        bank_candidates=bank_candidates,
+    )
+
+    assert result.status == "UNRESOLVED"
+    assert result.confidence == 0.0
+    assert result.confidence_bucket == ConfidenceBucket.LOW
+    assert result.candidate is None
+    assert result.ai_reasoning is None
+    assert "AI reasoning service failed" in result.reason
+    assert "UNRESOLVED" in result.reason
+
+
+
 def test_decide_chain_missing_payment_is_unresolved():
     chain = TransactionChain(
         order={

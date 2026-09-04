@@ -36,6 +36,7 @@ def make_settlement(
     return {
         "settlement_id": settlement_id,
         "payment_id": payment_id,
+        "gross_amount": amount,
         "net_amount": amount,
         "currency": "INR",
         "settlement_date": "2026-01-01",
