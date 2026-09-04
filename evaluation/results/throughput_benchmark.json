@@ -1,0 +1,26 @@
+{
+  "benchmark": "LedgerPilot reconciliation throughput",
+  "pipeline": "in-memory generate_dataset -> reconcile_all",
+  "runs_per_size": 3,
+  "timing": "median of measured runs",
+  "results": [
+    {
+      "records": 250,
+      "median_seconds": 0.016148,
+      "records_per_second": 15482.07,
+      "decisions": 250
+    },
+    {
+      "records": 500,
+      "median_seconds": 0.037093,
+      "records_per_second": 13479.63,
+      "decisions": 500
+    },
+    {
+      "records": 1000,
+      "median_seconds": 0.095201,
+      "records_per_second": 10504.06,
+      "decisions": 1000
+    }
+  ]
+}
