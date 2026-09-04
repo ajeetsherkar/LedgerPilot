@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from pydantic import BaseModel
+from psycopg.rows import dict_row
 
 from backend.app.database import (
     get_connection,
@@ -169,6 +170,177 @@ def run_reconciliation(request: ReconciliationRunRequest):
             result.status == "HUMAN_REVIEW"
             for result in results
         ),
+    }
+
+
+@app.get("/results")
+def get_results():
+    connection = get_connection()
+    try:
+        with connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """
+                SELECT
+                    result_id,
+                    batch_id,
+                    order_id,
+                    payment_id,
+                    settlement_id,
+                    bank_transaction_id,
+                    status,
+                    method,
+                    confidence::double precision AS confidence,
+                    confidence_bucket,
+                    reason,
+                    candidate,
+                    ai_reasoning,
+                    exception_type,
+                    created_at
+                FROM reconciliation_results
+                ORDER BY created_at DESC, result_id DESC
+                """
+            )
+            results = [dict(row) for row in cursor.fetchall()]
+    finally:
+        connection.close()
+
+    return {
+        "total": len(results),
+        "results": results,
+    }
+
+
+@app.get("/results/{result_id}")
+def get_result(result_id: str):
+    connection = get_connection()
+    try:
+        with connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """
+                SELECT
+                    result_id,
+                    batch_id,
+                    order_id,
+                    payment_id,
+                    settlement_id,
+                    bank_transaction_id,
+                    status,
+                    method,
+                    confidence::double precision AS confidence,
+                    confidence_bucket,
+                    reason,
+                    candidate,
+                    ai_reasoning,
+                    exception_type,
+                    created_at
+                FROM reconciliation_results
+                WHERE result_id = %s
+                """,
+                (result_id,),
+            )
+            result = cursor.fetchone()
+    finally:
+        connection.close()
+
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Reconciliation result not found: {result_id}",
+        )
+
+    return dict(result)
+
+
+@app.get("/exceptions")
+def get_exceptions():
+    connection = get_connection()
+    try:
+        with connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """
+                SELECT
+                    exception_id,
+                    result_id,
+                    batch_id,
+                    exception_type,
+                    status,
+                    reason,
+                    created_at
+                FROM exceptions
+                ORDER BY created_at DESC, exception_id DESC
+                """
+            )
+            exceptions = [dict(row) for row in cursor.fetchall()]
+    finally:
+        connection.close()
+
+    return {
+        "total": len(exceptions),
+        "exceptions": exceptions,
+    }
+
+
+@app.get("/metrics")
+def get_metrics():
+    connection = get_connection()
+    try:
+        with connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """
+                SELECT
+                    COUNT(*) AS total,
+                    COUNT(*) FILTER (
+                        WHERE status = 'AUTO_RESOLVED'
+                    ) AS auto_resolved,
+                    COUNT(*) FILTER (
+                        WHERE status = 'AI_SUGGESTED'
+                    ) AS ai_suggested,
+                    COUNT(*) FILTER (
+                        WHERE status = 'HUMAN_REVIEW'
+                    ) AS human_review
+                FROM reconciliation_results
+                """
+            )
+            status_counts = dict(cursor.fetchone())
+
+            cursor.execute(
+                """
+                SELECT
+                    COUNT(*) AS total_exceptions
+                FROM exceptions
+                """
+            )
+            exception_counts = dict(cursor.fetchone())
+
+            cursor.execute(
+                """
+                SELECT
+                    exception_type,
+                    COUNT(*) AS count
+                FROM exceptions
+                GROUP BY exception_type
+                ORDER BY count DESC, exception_type ASC
+                """
+            )
+            exceptions_by_type = [
+                dict(row) for row in cursor.fetchall()
+            ]
+    finally:
+        connection.close()
+
+    total = int(status_counts["total"])
+    auto_resolved = int(status_counts["auto_resolved"])
+    ai_suggested = int(status_counts["ai_suggested"])
+    human_review = int(status_counts["human_review"])
+    total_exceptions = int(exception_counts["total_exceptions"])
+
+    return {
+        "total": total,
+        "auto_resolved": auto_resolved,
+        "ai_suggested": ai_suggested,
+        "human_review": human_review,
+        "total_exceptions": total_exceptions,
+        "exceptions_by_type": exceptions_by_type,
     }
 
 

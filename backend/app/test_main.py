@@ -219,6 +219,142 @@ def test_reconciliation_run_endpoint():
     assert audit_count == 10
 
 
+def test_metrics_endpoint():
+    response = client.get("/metrics")
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    required_fields = {
+        "total",
+        "auto_resolved",
+        "ai_suggested",
+        "human_review",
+        "total_exceptions",
+        "exceptions_by_type",
+    }
+
+    assert required_fields.issubset(data.keys())
+
+    assert data["total"] >= 0
+    assert data["auto_resolved"] >= 0
+    assert data["ai_suggested"] >= 0
+    assert data["human_review"] >= 0
+    assert data["total_exceptions"] >= 0
+
+    assert (
+        data["auto_resolved"]
+        + data["ai_suggested"]
+        + data["human_review"]
+        == data["total"]
+    )
+
+    assert isinstance(data["exceptions_by_type"], list)
+
+    exception_total = sum(
+        item["count"] for item in data["exceptions_by_type"]
+    )
+
+    assert exception_total == data["total_exceptions"]
+
+
+def test_exceptions_endpoint():
+    response = client.get("/exceptions")
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert "total" in data
+    assert "exceptions" in data
+    assert data["total"] == len(data["exceptions"])
+    assert data["total"] > 0
+
+    exception = data["exceptions"][0]
+
+    required_fields = {
+        "exception_id",
+        "result_id",
+        "batch_id",
+        "exception_type",
+        "status",
+        "reason",
+        "created_at",
+    }
+
+    assert required_fields.issubset(exception.keys())
+
+
+def test_result_by_id_endpoint():
+    response = client.get("/results")
+
+    assert response.status_code == 200
+
+    results = response.json()["results"]
+    assert results
+
+    result_id = results[0]["result_id"]
+
+    response = client.get(f"/results/{result_id}")
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["result_id"] == result_id
+    assert "batch_id" in data
+    assert "status" in data
+    assert "method" in data
+    assert "confidence" in data
+    assert "reason" in data
+    assert "candidate" in data
+    assert "ai_reasoning" in data
+
+    response = client.get("/results/RESULT-DOES-NOT-EXIST")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == (
+        "Reconciliation result not found: RESULT-DOES-NOT-EXIST"
+    )
+
+
+def test_results_endpoint():
+    response = client.get("/results")
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert "total" in data
+    assert "results" in data
+    assert data["total"] == len(data["results"])
+    assert data["total"] > 0
+
+    result = data["results"][0]
+
+    required_fields = {
+        "result_id",
+        "batch_id",
+        "order_id",
+        "payment_id",
+        "settlement_id",
+        "bank_transaction_id",
+        "status",
+        "method",
+        "confidence",
+        "confidence_bucket",
+        "reason",
+        "candidate",
+        "ai_reasoning",
+        "exception_type",
+        "created_at",
+    }
+
+    assert required_fields.issubset(result.keys())
+    assert isinstance(result["confidence"], float)
+
+
 def _create_test_batch(batch_id: str):
     connection = get_connection()
     try:
