@@ -3,7 +3,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from pydantic import BaseModel
 
-from backend.app.database import initialize_database
+from backend.app.database import (
+    get_connection,
+    initialize_database,
+)
 from backend.app.reconciliation.batch_loader import load_batch
 from backend.app.reconciliation.pipeline import reconcile_all
 from backend.app.reconciliation.ingestion import ingest_csv_files
@@ -22,6 +25,10 @@ from backend.app.reconciliation.human_review import (
 class ReviewResolutionRequest(BaseModel):
     reviewer: str
     reason: str
+
+
+class ReconciliationRunRequest(BaseModel):
+    batch_id: str
 
 
 @asynccontextmanager
@@ -66,6 +73,105 @@ def upload_csv_files(
     }
 
 
+@app.post("/reconciliation/run")
+def run_reconciliation(request: ReconciliationRunRequest):
+    batch_id = request.batch_id
+
+    connection = get_connection()
+    try:
+        existing_total = connection.execute(
+            """
+            SELECT COUNT(*)
+            FROM reconciliation_results
+            WHERE batch_id = %s
+            """,
+            (batch_id,),
+        ).fetchone()[0]
+
+        if existing_total > 0:
+            rows = connection.execute(
+                """
+                SELECT status, COUNT(*)
+                FROM reconciliation_results
+                WHERE batch_id = %s
+                GROUP BY status
+                """,
+                (batch_id,),
+            ).fetchall()
+
+            status_counts = dict(rows)
+
+            return {
+                "batch_id": batch_id,
+                "total": existing_total,
+                "auto_resolved": status_counts.get(
+                    "AUTO_RESOLVED",
+                    0,
+                ),
+                "ai_suggested": status_counts.get(
+                    "AI_SUGGESTED",
+                    0,
+                ),
+                "human_review": status_counts.get(
+                    "HUMAN_REVIEW",
+                    0,
+                ),
+            }
+    finally:
+        connection.close()
+
+    try:
+        (
+            orders,
+            payments,
+            settlements,
+            banks,
+        ) = load_batch(batch_id)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Batch not found or could not be loaded: {batch_id}",
+        ) from exc
+
+    persist_source_records(
+        batch_id=batch_id,
+        orders=orders,
+        payments=payments,
+        settlements=settlements,
+        banks=banks,
+    )
+
+    results = reconcile_all(
+        orders,
+        payments,
+        settlements,
+        banks,
+        bank_candidates=banks,
+    )
+
+    persist_decisions(
+        batch_id=batch_id,
+        decisions=results,
+    )
+
+    return {
+        "batch_id": batch_id,
+        "total": len(results),
+        "auto_resolved": sum(
+            result.status == "AUTO_RESOLVED"
+            for result in results
+        ),
+        "ai_suggested": sum(
+            result.status == "AI_SUGGESTED"
+            for result in results
+        ),
+        "human_review": sum(
+            result.status == "HUMAN_REVIEW"
+            for result in results
+        ),
+    }
+
+
 @app.get("/reconciliation/{batch_id}")
 def reconciliation(batch_id: str):
 
@@ -105,7 +211,7 @@ def reconciliation(batch_id: str):
 
         review_id = None
 
-        if result.status == "REVIEW":
+        if result.status == "HUMAN_REVIEW":
             review = create_or_get_review(
                 batch_id=batch_id,
                 order_id=result.order_id,

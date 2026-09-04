@@ -121,7 +121,122 @@ def test_upload_and_reconciliation():
         assert result["confidence"] == 1.0
 
 
+def test_reconciliation_run_endpoint():
+    with (
+        open("data/test_orders.csv", "rb") as orders,
+        open("data/test_payments.csv", "rb") as payments,
+        open("data/test_settlements.csv", "rb") as settlements,
+        open("data/test_bank.csv", "rb") as bank,
+    ):
+        upload_response = client.post(
+            "/upload",
+            files={
+                "orders": (
+                    "test_orders.csv",
+                    orders,
+                    "text/csv",
+                ),
+                "payments": (
+                    "test_payments.csv",
+                    payments,
+                    "text/csv",
+                ),
+                "settlements": (
+                    "test_settlements.csv",
+                    settlements,
+                    "text/csv",
+                ),
+                "bank": (
+                    "test_bank.csv",
+                    bank,
+                    "text/csv",
+                ),
+            },
+        )
+
+    assert upload_response.status_code == 200
+
+    batch_id = upload_response.json()["batch_id"]
+
+    response = client.post(
+        "/reconciliation/run",
+        json={"batch_id": batch_id},
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data == {
+        "batch_id": batch_id,
+        "total": 10,
+        "auto_resolved": 9,
+        "ai_suggested": 0,
+        "human_review": 1,
+    }
+
+    response = client.post(
+        "/reconciliation/run",
+        json={"batch_id": batch_id},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == data
+
+    connection = get_connection()
+    try:
+        result_count = connection.execute(
+            """
+            SELECT COUNT(*)
+            FROM reconciliation_results
+            WHERE batch_id = %s
+            """,
+            (batch_id,),
+        ).fetchone()[0]
+
+        exception_count = connection.execute(
+            """
+            SELECT COUNT(*)
+            FROM exceptions
+            WHERE batch_id = %s
+            """,
+            (batch_id,),
+        ).fetchone()[0]
+
+        audit_count = connection.execute(
+            """
+            SELECT COUNT(*)
+            FROM audit_logs
+            WHERE batch_id = %s
+            """,
+            (batch_id,),
+        ).fetchone()[0]
+    finally:
+        connection.close()
+
+    assert result_count == 10
+    assert exception_count == 1
+    assert audit_count == 10
+
+
+def _create_test_batch(batch_id: str):
+    connection = get_connection()
+    try:
+        connection.execute(
+            """
+            INSERT INTO upload_batches (batch_id, uploaded_at)
+            VALUES (%s, %s)
+            ON CONFLICT (batch_id) DO NOTHING
+            """,
+            (batch_id, "2026-01-01T00:00:00+00:00"),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+
 def test_human_review_list_and_get():
+    _create_test_batch("TEST-API-REVIEW")
 
     review = create_or_get_review(
         batch_id="TEST-API-REVIEW",
@@ -163,6 +278,7 @@ def test_human_review_list_and_get():
 
 
 def test_human_review_approve():
+    _create_test_batch("TEST-API-APPROVE")
 
     review = create_or_get_review(
         batch_id="TEST-API-APPROVE",
@@ -199,6 +315,7 @@ def test_human_review_approve():
 
 
 def test_human_review_reject():
+    _create_test_batch("TEST-API-REJECT")
 
     review = create_or_get_review(
         batch_id="TEST-API-REJECT",
@@ -251,6 +368,7 @@ def test_human_review_invalid_review_id():
 
 
 def test_human_review_wrong_batch():
+    _create_test_batch("TEST-CORRECT-BATCH")
 
     review = create_or_get_review(
         batch_id="TEST-CORRECT-BATCH",
@@ -276,6 +394,7 @@ def test_human_review_wrong_batch():
 
 
 def test_human_review_cannot_be_resolved_twice():
+    _create_test_batch("TEST-DOUBLE-RESOLVE")
 
     review = create_or_get_review(
         batch_id="TEST-DOUBLE-RESOLVE",
@@ -314,6 +433,7 @@ def test_human_review_cannot_be_resolved_twice():
 
 
 def test_human_review_requires_reviewer_and_reason():
+    _create_test_batch("TEST-VALIDATION")
 
     review = create_or_get_review(
         batch_id="TEST-VALIDATION",
@@ -341,6 +461,7 @@ def test_human_review_requires_reviewer_and_reason():
 
 
 def test_reconciliation_review_creates_human_review_record():
+    _create_test_batch("TEST-AUTO-REVIEW")
 
     from backend.app.reconciliation.decision_engine import (
         MatchDecision,
@@ -395,7 +516,7 @@ def test_reconciliation_review_creates_human_review_record():
 
     try:
         connection.execute(
-            "DELETE FROM human_reviews WHERE batch_id = ?",
+            "DELETE FROM human_reviews WHERE batch_id = %s",
             (batch_id,),
         )
         connection.commit()
@@ -409,7 +530,7 @@ def _cleanup_human_review(batch_id: str):
 
     try:
         connection.execute(
-            "DELETE FROM human_reviews WHERE batch_id = ?",
+            "DELETE FROM human_reviews WHERE batch_id = %s",
             (batch_id,),
         )
         connection.commit()

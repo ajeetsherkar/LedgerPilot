@@ -1016,6 +1016,11 @@ def decide_chain(
                     ai_response,
                 )
 
+                if isinstance(decision.candidate, dict):
+                    decision.candidate["ai_reasoning"] = dict(
+                        decision.ai_reasoning
+                    )
+
                 decision.reason = (
                     f"{decision.reason} "
                     "Medium-confidence case routed to AI reasoning service "

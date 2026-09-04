@@ -23,10 +23,7 @@ def _create_review_id() -> str:
 
 
 def _same_value_clause(column: str) -> str:
-    return (
-        f"({column} = %s "
-        f"OR ({column} IS NULL AND %s IS NULL))"
-    )
+    return f"{column} IS NOT DISTINCT FROM %s"
 
 
 def create_or_get_review(
@@ -40,14 +37,14 @@ def create_or_get_review(
     reason: str,
 ) -> dict[str, Any]:
     """
-    Create a pending human-review record for a REVIEW decision.
+    Create a pending human-review record for a HUMAN_REVIEW decision.
 
     If the same transaction already has a review record, return
     the existing record instead of creating a duplicate.
     """
-    if original_decision != "REVIEW":
+    if original_decision not in {"REVIEW", "HUMAN_REVIEW"}:
         raise ValueError(
-            "Human review can only be created for REVIEW decisions."
+            "Human review can only be created for HUMAN_REVIEW decisions."
         )
 
     connection = get_connection()
@@ -71,12 +68,8 @@ def create_or_get_review(
                 (
                     batch_id,
                     order_id,
-                    order_id,
-                    payment_id,
                     payment_id,
                     settlement_id,
-                    settlement_id,
-                    bank_transaction_id,
                     bank_transaction_id,
                 ),
             )
