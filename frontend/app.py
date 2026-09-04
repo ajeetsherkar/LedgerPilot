@@ -809,23 +809,17 @@ def transaction_detail_screen():
         st.warning(
             f"**HUMAN_REVIEW** — {explanation_text}"
         )
-
         ambiguity = detail.get("ambiguity") or {}
         top_two = ambiguity.get("top_two_candidates") or []
-
         if len(top_two) >= 2:
             st.write("**Closest candidates:**")
-
             candidate_rows = []
-
             for candidate in top_two[:2]:
                 score = candidate.get("score")
-
                 if isinstance(score, (int, float)):
                     display_score = f"{float(score):.2%}"
                 else:
                     display_score = "—"
-
                 candidate_rows.append(
                     {
                         "Candidate": candidate.get(
@@ -843,15 +837,12 @@ def transaction_detail_screen():
                         "Score": display_score,
                     }
                 )
-
             st.dataframe(
                 candidate_rows,
                 use_container_width=True,
                 hide_index=True,
             )
-
             score_margin = ambiguity.get("margin_percentage_points")
-
             if isinstance(score_margin, (int, float)):
                 st.write(
                     f"**Score difference:** "
@@ -859,17 +850,191 @@ def transaction_detail_screen():
                 )
 
         escalation = detail.get("escalation_policy") or {}
-
         st.info(
             f"**Escalation policy:** "
             f"{escalation.get('trigger', 'Configured ambiguity policy')}"
         )
-
         st.write(
             "**Action:** "
             f"{escalation.get('action', 'HUMAN_REVIEW')}"
         )
 
+        review_id = detail.get("review_id")
+        review_record = None
+
+        if not review_id:
+            batch_id = detail.get("batch_id")
+            reviews = []
+
+            try:
+                if batch_id:
+                    review_response = requests.get(
+                        f"{API_BASE_URL}/reconciliation/{batch_id}/reviews",
+                        timeout=10,
+                    )
+                    review_response.raise_for_status()
+                    review_payload = review_response.json()
+
+                    if isinstance(review_payload, list):
+                        reviews = review_payload
+                    elif isinstance(review_payload, dict):
+                        reviews = (
+                            review_payload.get("reviews")
+                            or review_payload.get("data")
+                            or review_payload.get("items")
+                            or []
+                        )
+            except requests.RequestException as exc:
+                st.warning(f"Could not load human review details: {exc}")
+
+            for review in reviews:
+                if not isinstance(review, dict):
+                    continue
+                if (
+                    review.get("result_id") == selected_result_id
+                    or (
+                        review.get("order_id") == detail.get("order_id")
+                        and review.get("payment_id") == detail.get("payment_id")
+                        and review.get("settlement_id") == detail.get("settlement_id")
+                    )
+                ):
+                    review_id = review.get("review_id")
+                    review_record = review
+                    break
+
+        if review_id:
+            st.markdown("### Human Review")
+
+            if review_record is None:
+                try:
+                    review_response = requests.get(
+                        f"{API_BASE_URL}/reconciliation/"
+                        f"{detail.get('batch_id')}/reviews/{review_id}",
+                        timeout=10,
+                    )
+                    review_response.raise_for_status()
+                    review_payload = review_response.json()
+                    if isinstance(review_payload, dict):
+                        review_record = review_payload.get("review") or review_payload
+                except requests.RequestException as exc:
+                    st.warning(f"Could not load human review status: {exc}")
+
+            final_decision = (
+                review_record.get("final_decision")
+                if isinstance(review_record, dict)
+                else None
+            )
+
+            if final_decision:
+                reviewer_name = (
+                    review_record.get("reviewer")
+                    or "—"
+                )
+                review_reason = (
+                    review_record.get("reason")
+                    or "No review reason available."
+                )
+                reviewed_at = (
+                    review_record.get("reviewed_at")
+                    or "—"
+                )
+
+                if final_decision == "APPROVE":
+                    st.success("**Human Review — APPROVED**")
+                elif final_decision == "REJECT":
+                    st.error("**Human Review — REJECTED**")
+                else:
+                    st.info(
+                        f"**Human Review — {final_decision}**"
+                    )
+
+                st.write(f"**Reviewer:** {reviewer_name}")
+                st.write(f"**Review reason:** {review_reason}")
+                st.write(f"**Reviewed at:** {reviewed_at}")
+            else:
+                reviewer = st.text_input(
+                    "Reviewer",
+                    key=f"reviewer_{selected_result_id}",
+                    placeholder="Enter reviewer name",
+                )
+
+                reason = st.text_area(
+                    "Review reason",
+                    key=f"review_reason_{selected_result_id}",
+                    placeholder="Explain why you approve or reject this transaction.",
+                )
+
+                action_col1, action_col2 = st.columns(2)
+
+                def resolve_human_review(decision):
+                    if not reviewer.strip():
+                        st.error("Reviewer is required.")
+                        return
+
+                    if not reason.strip():
+                        st.error("Review reason is required.")
+                        return
+
+                    endpoint = (
+                        f"{API_BASE_URL}/reconciliation/"
+                        f"{detail.get('batch_id')}/reviews/"
+                        f"{review_id}/{decision}"
+                    )
+
+                    try:
+                        response = requests.post(
+                            endpoint,
+                            json={
+                                "reviewer": reviewer.strip(),
+                                "reason": reason.strip(),
+                            },
+                            timeout=10,
+                        )
+                        response.raise_for_status()
+                    except requests.ConnectionError:
+                        st.error(
+                            "Could not connect to the LedgerPilot backend. "
+                            "Make sure FastAPI is running."
+                        )
+                        return
+                    except requests.RequestException as exc:
+                        try:
+                            error_detail = response.json().get("detail")
+                        except (AttributeError, ValueError):
+                            error_detail = None
+
+                        st.error(
+                            error_detail
+                            or f"Failed to resolve human review: {exc}"
+                        )
+                        return
+
+                    st.success(
+                        f"Review {decision.upper()}D successfully."
+                    )
+                    st.rerun()
+
+                with action_col1:
+                    if st.button(
+                        "Approve",
+                        type="primary",
+                        use_container_width=True,
+                        key=f"approve_{selected_result_id}",
+                    ):
+                        resolve_human_review("approve")
+
+                with action_col2:
+                    if st.button(
+                        "Reject",
+                        use_container_width=True,
+                        key=f"reject_{selected_result_id}",
+                    ):
+                        resolve_human_review("reject")
+
+        else:
+            st.warning(
+                "No human review record is available for this transaction."
+            )
     else:
         st.info(
             f"**{status}** — {explanation_text}"

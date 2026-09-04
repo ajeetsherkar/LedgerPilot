@@ -202,7 +202,7 @@ def resolve_review(
                     f"Human review not found: {review_id}"
                 )
 
-            if row["original_decision"] != "REVIEW":
+            if row["original_decision"] not in {"REVIEW", "HUMAN_REVIEW"}:
                 raise ValueError(
                     "Human review has an invalid original decision."
                 )
