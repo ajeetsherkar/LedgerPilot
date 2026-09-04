@@ -1,5 +1,7 @@
 import json
 
+from psycopg.rows import dict_row
+
 from backend.app.database import get_connection
 
 
@@ -15,15 +17,17 @@ def load_batch(batch_id: str):
     connection = get_connection()
 
     try:
-        rows = connection.execute(
-            """
-            SELECT source, payload
-            FROM raw_records
-            WHERE batch_id = ?
-            ORDER BY source, row_number
-            """,
-            (batch_id,),
-        ).fetchall()
+        with connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """
+                SELECT source, payload
+                FROM raw_records
+                WHERE batch_id = %s
+                ORDER BY source, row_number
+                """,
+                (batch_id,),
+            )
+            rows = cursor.fetchall()
     finally:
         connection.close()
 

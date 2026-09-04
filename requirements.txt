@@ -10,3 +10,5 @@ pytest
 httpx
 python-multipart
 rapidfuzz
+
+psycopg[binary]==3.3.5

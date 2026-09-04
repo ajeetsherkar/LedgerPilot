@@ -8,12 +8,12 @@ def test_load_batch_returns_records():
     connection = get_connection()
 
     connection.execute(
-        "DELETE FROM raw_records WHERE batch_id = ?",
+        "DELETE FROM raw_records WHERE batch_id = %s",
         ("TEST-BATCH",),
     )
 
     connection.execute(
-        "DELETE FROM upload_batches WHERE batch_id = ?",
+        "DELETE FROM upload_batches WHERE batch_id = %s",
         ("TEST-BATCH",),
     )
 
@@ -23,7 +23,7 @@ def test_load_batch_returns_records():
             batch_id,
             uploaded_at
         )
-        VALUES (?, ?)
+        VALUES (%s, %s)
         """,
         ("TEST-BATCH", "2026-09-01T00:00:00+00:00"),
     )
@@ -36,7 +36,7 @@ def test_load_batch_returns_records():
             row_number,
             payload
         )
-        VALUES (?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s)
         """,
         (
             "TEST-BATCH",

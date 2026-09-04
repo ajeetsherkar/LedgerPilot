@@ -1,6 +1,9 @@
 import uuid
+
 from datetime import datetime, timezone
 from typing import Any, Optional
+
+from psycopg.rows import dict_row
 
 from backend.app.database import get_connection
 
@@ -21,8 +24,8 @@ def _create_review_id() -> str:
 
 def _same_value_clause(column: str) -> str:
     return (
-        f"({column} = ? "
-        f"OR ({column} IS NULL AND ? IS NULL))"
+        f"({column} = %s "
+        f"OR ({column} IS NULL AND %s IS NULL))"
     )
 
 
@@ -42,7 +45,6 @@ def create_or_get_review(
     If the same transaction already has a review record, return
     the existing record instead of creating a duplicate.
     """
-
     if original_decision != "REVIEW":
         raise ValueError(
             "Human review can only be created for REVIEW decisions."
@@ -51,82 +53,90 @@ def create_or_get_review(
     connection = get_connection()
 
     try:
-        query = f"""
-            SELECT *
-            FROM human_reviews
-            WHERE batch_id = ?
-              AND {_same_value_clause("order_id")}
-              AND {_same_value_clause("payment_id")}
-              AND {_same_value_clause("settlement_id")}
-              AND {_same_value_clause("bank_transaction_id")}
-            ORDER BY created_at DESC
-            LIMIT 1
-        """
-
-        row = connection.execute(
-            query,
-            (
-                batch_id,
-                order_id,
-                order_id,
-                payment_id,
-                payment_id,
-                settlement_id,
-                settlement_id,
-                bank_transaction_id,
-                bank_transaction_id,
-            ),
-        ).fetchone()
-
-        if row is not None:
-            return dict(row)
-
-        review_id = _create_review_id()
-        created_at = _now()
-
-        connection.execute(
+        with connection.cursor(row_factory=dict_row) as cursor:
+            query = f"""
+                SELECT *
+                FROM human_reviews
+                WHERE batch_id = %s
+                  AND {_same_value_clause("order_id")}
+                  AND {_same_value_clause("payment_id")}
+                  AND {_same_value_clause("settlement_id")}
+                  AND {_same_value_clause("bank_transaction_id")}
+                ORDER BY created_at DESC
+                LIMIT 1
             """
-            INSERT INTO human_reviews (
-                review_id,
-                batch_id,
-                order_id,
-                payment_id,
-                settlement_id,
-                bank_transaction_id,
-                original_decision,
-                final_decision,
-                reviewer,
-                reviewed_at,
-                reason,
-                created_at
+
+            cursor.execute(
+                query,
+                (
+                    batch_id,
+                    order_id,
+                    order_id,
+                    payment_id,
+                    payment_id,
+                    settlement_id,
+                    settlement_id,
+                    bank_transaction_id,
+                    bank_transaction_id,
+                ),
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?)
-            """,
-            (
-                review_id,
-                batch_id,
-                order_id,
-                payment_id,
-                settlement_id,
-                bank_transaction_id,
-                original_decision,
-                reason,
-                created_at,
-            ),
-        )
 
-        connection.commit()
+            row = cursor.fetchone()
 
-        row = connection.execute(
-            """
-            SELECT *
-            FROM human_reviews
-            WHERE review_id = ?
-            """,
-            (review_id,),
-        ).fetchone()
+            if row is not None:
+                return dict(row)
 
-        return dict(row)
+            review_id = _create_review_id()
+            created_at = _now()
+
+            cursor.execute(
+                """
+                INSERT INTO human_reviews (
+                    review_id,
+                    batch_id,
+                    order_id,
+                    payment_id,
+                    settlement_id,
+                    bank_transaction_id,
+                    original_decision,
+                    final_decision,
+                    reviewer,
+                    reviewed_at,
+                    reason,
+                    created_at
+                )
+                VALUES (
+                    %s, %s, %s, %s, %s, %s, %s,
+                    NULL, NULL, NULL, %s, %s
+                )
+                """,
+                (
+                    review_id,
+                    batch_id,
+                    order_id,
+                    payment_id,
+                    settlement_id,
+                    bank_transaction_id,
+                    original_decision,
+                    reason,
+                    created_at,
+                ),
+            )
+
+            connection.commit()
+
+            cursor.execute(
+                """
+                SELECT *
+                FROM human_reviews
+                WHERE review_id = %s
+                """,
+                (review_id,),
+            )
+
+            row = cursor.fetchone()
+
+            return dict(row)
 
     finally:
         connection.close()
@@ -136,16 +146,19 @@ def get_review(review_id: str) -> Optional[dict[str, Any]]:
     connection = get_connection()
 
     try:
-        row = connection.execute(
-            """
-            SELECT *
-            FROM human_reviews
-            WHERE review_id = ?
-            """,
-            (review_id,),
-        ).fetchone()
+        with connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """
+                SELECT *
+                FROM human_reviews
+                WHERE review_id = %s
+                """,
+                (review_id,),
+            )
 
-        return dict(row) if row is not None else None
+            row = cursor.fetchone()
+
+            return dict(row) if row is not None else None
 
     finally:
         connection.close()
@@ -161,7 +174,6 @@ def resolve_review(
     """
     Approve or reject a pending human-review record.
     """
-
     if final_decision not in ALLOWED_FINAL_DECISIONS:
         raise ValueError(
             "final_decision must be APPROVE or REJECT."
@@ -180,63 +192,68 @@ def resolve_review(
     connection = get_connection()
 
     try:
-        row = connection.execute(
-            """
-            SELECT *
-            FROM human_reviews
-            WHERE review_id = ?
-            """,
-            (review_id,),
-        ).fetchone()
-
-        if row is None:
-            raise ValueError(
-                f"Human review not found: {review_id}"
+        with connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """
+                SELECT *
+                FROM human_reviews
+                WHERE review_id = %s
+                """,
+                (review_id,),
             )
 
-        if row["original_decision"] != "REVIEW":
-            raise ValueError(
-                "Human review has an invalid original decision."
+            row = cursor.fetchone()
+
+            if row is None:
+                raise ValueError(
+                    f"Human review not found: {review_id}"
+                )
+
+            if row["original_decision"] != "REVIEW":
+                raise ValueError(
+                    "Human review has an invalid original decision."
+                )
+
+            if row["final_decision"] is not None:
+                raise ValueError(
+                    "Human review has already been resolved."
+                )
+
+            reviewed_at = _now()
+
+            cursor.execute(
+                """
+                UPDATE human_reviews
+                SET
+                    final_decision = %s,
+                    reviewer = %s,
+                    reviewed_at = %s,
+                    reason = %s
+                WHERE review_id = %s
+                """,
+                (
+                    final_decision,
+                    reviewer.strip(),
+                    reviewed_at,
+                    reason.strip(),
+                    review_id,
+                ),
             )
 
-        if row["final_decision"] is not None:
-            raise ValueError(
-                "Human review has already been resolved."
+            connection.commit()
+
+            cursor.execute(
+                """
+                SELECT *
+                FROM human_reviews
+                WHERE review_id = %s
+                """,
+                (review_id,),
             )
 
-        reviewed_at = _now()
+            row = cursor.fetchone()
 
-        connection.execute(
-            """
-            UPDATE human_reviews
-            SET
-                final_decision = ?,
-                reviewer = ?,
-                reviewed_at = ?,
-                reason = ?
-            WHERE review_id = ?
-            """,
-            (
-                final_decision,
-                reviewer.strip(),
-                reviewed_at,
-                reason.strip(),
-                review_id,
-            ),
-        )
-
-        connection.commit()
-
-        row = connection.execute(
-            """
-            SELECT *
-            FROM human_reviews
-            WHERE review_id = ?
-            """,
-            (review_id,),
-        ).fetchone()
-
-        return dict(row)
+            return dict(row)
 
     finally:
         connection.close()
@@ -248,17 +265,20 @@ def list_reviews(
     connection = get_connection()
 
     try:
-        rows = connection.execute(
-            """
-            SELECT *
-            FROM human_reviews
-            WHERE batch_id = ?
-            ORDER BY created_at
-            """,
-            (batch_id,),
-        ).fetchall()
+        with connection.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """
+                SELECT *
+                FROM human_reviews
+                WHERE batch_id = %s
+                ORDER BY created_at
+                """,
+                (batch_id,),
+            )
 
-        return [dict(row) for row in rows]
+            rows = cursor.fetchall()
+
+            return [dict(row) for row in rows]
 
     finally:
         connection.close()

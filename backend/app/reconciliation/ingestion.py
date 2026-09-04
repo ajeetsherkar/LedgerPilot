@@ -1,5 +1,4 @@
 import json
-import sqlite3
 import uuid
 from datetime import datetime, timezone
 
@@ -44,54 +43,54 @@ def ingest_csv_files(
         dataframes[source] = dataframe
 
     batch_id = create_batch_id()
-
     uploaded_at = datetime.now(timezone.utc).isoformat()
 
     connection = get_connection()
 
     try:
-        connection.execute(
-            """
-            INSERT INTO upload_batches (
-                batch_id,
-                uploaded_at
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO upload_batches (
+                    batch_id,
+                    uploaded_at
+                )
+                VALUES (%s, %s)
+                """,
+                (batch_id, uploaded_at),
             )
-            VALUES (?, ?)
-            """,
-            (batch_id, uploaded_at),
-        )
 
-        total_records = 0
+            total_records = 0
 
-        for source, dataframe in dataframes.items():
-            for row_number, record in enumerate(
-                dataframe.to_dict(orient="records"),
-                start=1,
-            ):
-                payload = json.dumps(
-                    record,
-                    default=str,
-                )
-
-                connection.execute(
-                    """
-                    INSERT INTO raw_records (
-                        batch_id,
-                        source,
-                        row_number,
-                        payload
+            for source, dataframe in dataframes.items():
+                for row_number, record in enumerate(
+                    dataframe.to_dict(orient="records"),
+                    start=1,
+                ):
+                    payload = json.dumps(
+                        record,
+                        default=str,
                     )
-                    VALUES (?, ?, ?, ?)
-                    """,
-                    (
-                        batch_id,
-                        source,
-                        row_number,
-                        payload,
-                    ),
-                )
 
-                total_records += 1
+                    cursor.execute(
+                        """
+                        INSERT INTO raw_records (
+                            batch_id,
+                            source,
+                            row_number,
+                            payload
+                        )
+                        VALUES (%s, %s, %s, %s)
+                        """,
+                        (
+                            batch_id,
+                            source,
+                            row_number,
+                            payload,
+                        ),
+                    )
+
+                    total_records += 1
 
         connection.commit()
 

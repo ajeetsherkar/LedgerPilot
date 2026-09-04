@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: ledgerpilot-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ledgerpilot
+      POSTGRES_USER: ledgerpilot
+      POSTGRES_PASSWORD: ledgerpilot_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - ledgerpilot_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  ledgerpilot_postgres_data:

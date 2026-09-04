@@ -4,10 +4,13 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from backend.app.database import initialize_database
-from backend.app.reconciliation.engine import load_datasets
 from backend.app.reconciliation.batch_loader import load_batch
 from backend.app.reconciliation.pipeline import reconcile_all
 from backend.app.reconciliation.ingestion import ingest_csv_files
+from backend.app.reconciliation.persistence import (
+    persist_source_records,
+    persist_decisions,
+)
 from backend.app.reconciliation.human_review import (
     create_or_get_review,
     get_review,
@@ -73,12 +76,27 @@ def reconciliation(batch_id: str):
         banks,
     ) = load_batch(batch_id)
 
+    # Persist the typed source records for this batch.
+    persist_source_records(
+        batch_id=batch_id,
+        orders=orders,
+        payments=payments,
+        settlements=settlements,
+        banks=banks,
+    )
+
     results = reconcile_all(
         orders,
         payments,
         settlements,
         banks,
         bank_candidates=banks,
+    )
+
+    # Persist the canonical Day 3 decisions, exceptions, and audit events.
+    persist_decisions(
+        batch_id=batch_id,
+        decisions=results,
     )
 
     response_results = []
