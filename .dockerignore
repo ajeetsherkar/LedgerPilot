@@ -1,0 +1,16 @@
+.git
+.gitignore
+.venv
+__pycache__
+.pytest_cache
+*.pyc
+*.pyo
+*.pyd
+.DS_Store
+data/ledgerpilot.db
+data/*.csv
+tests
+evaluation
+docs
+*.md
+.env
