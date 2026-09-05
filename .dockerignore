@@ -10,7 +10,6 @@ __pycache__
 data/ledgerpilot.db
 data/*.csv
 tests
-evaluation
 docs
 *.md
 .env
