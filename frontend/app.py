@@ -225,11 +225,12 @@ def dashboard_screen():
     st.write("Live reconciliation summary from the backend.")
 
     try:
-        response = requests.get(
-            f"{API_BASE_URL}/results",
-            timeout=30,
-        )
-        response.raise_for_status()
+        with st.spinner("Loading reconciliation results..."):
+            response = requests.get(
+                f"{API_BASE_URL}/results",
+                timeout=30,
+            )
+            response.raise_for_status()
     except requests.exceptions.Timeout:
         st.error("The results request timed out. Please try again.")
         return
@@ -265,6 +266,13 @@ def dashboard_screen():
             records = []
     else:
         st.error("The results API returned an unexpected response format.")
+        return
+
+    if not records:
+        st.info(
+            "No reconciliation results are available yet. "
+            "Upload the source CSV files and run reconciliation to populate the dashboard."
+        )
         return
 
     total = len(records)
@@ -407,12 +415,13 @@ def exceptions_screen():
     ]
 
     try:
-        response = requests.get(
-            f"{API_BASE_URL}/exceptions",
-            timeout=10,
-        )
-        response.raise_for_status()
-        payload = response.json()
+        with st.spinner("Loading exceptions..."):
+            response = requests.get(
+                f"{API_BASE_URL}/exceptions",
+                timeout=10,
+            )
+            response.raise_for_status()
+            payload = response.json()
     except requests.Timeout:
         st.error("The backend timed out while loading exceptions.")
         return
@@ -437,6 +446,13 @@ def exceptions_screen():
 
     if not isinstance(exceptions, list):
         st.error("Invalid exceptions data returned by backend.")
+        return
+
+    if not exceptions:
+        st.info(
+            "No reconciliation exceptions are available. "
+            "Run a reconciliation batch to populate this screen."
+        )
         return
 
     st.metric("Total exceptions", len(exceptions))
@@ -511,12 +527,13 @@ def transaction_detail_screen():
     )
 
     try:
-        response = requests.get(
-            f"{API_BASE_URL}/results",
-            timeout=10,
-        )
-        response.raise_for_status()
-        payload = response.json()
+        with st.spinner("Loading reconciliation results..."):
+            response = requests.get(
+                f"{API_BASE_URL}/results",
+                timeout=10,
+            )
+            response.raise_for_status()
+            payload = response.json()
     except requests.Timeout:
         st.error("The backend timed out while loading reconciliation results.")
         return
@@ -569,12 +586,13 @@ def transaction_detail_screen():
     )
 
     try:
-        detail_response = requests.get(
-            f"{API_BASE_URL}/results/{selected_result_id}",
-            timeout=10,
-        )
-        detail_response.raise_for_status()
-        detail = detail_response.json()
+        with st.spinner("Loading transaction details..."):
+            detail_response = requests.get(
+                f"{API_BASE_URL}/results/{selected_result_id}",
+                timeout=10,
+            )
+            detail_response.raise_for_status()
+            detail = detail_response.json()
     except requests.Timeout:
         st.error("The backend timed out while loading transaction details.")
         return
